@@ -94,6 +94,13 @@ export async function getMessages(sessionId: number, skip: number = 0, limit: nu
 }
 
 export async function* sendMessageStream(sessionId: number, message: MessageCreate): AsyncGenerator<{ event: string, data: any }> {
+  // SSE Debug timing
+  const sseStartTime = performance.now()
+  let sseFrameCount = 0
+  const formatTime = (t: number) => ((t - sseStartTime) / 1000).toFixed(3)
+
+  console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Starting fetch for session ${sessionId}`)
+
   const response = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: {
@@ -101,6 +108,8 @@ export async function* sendMessageStream(sessionId: number, message: MessageCrea
     },
     body: JSON.stringify(message),
   })
+
+  console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Response received at ${formatTime(performance.now())}s, status: ${response.status}`)
 
   if (!response.ok) {
     throw new Error('Failed to send message')
@@ -111,10 +120,19 @@ export async function* sendMessageStream(sessionId: number, message: MessageCrea
 
   const decoder = new TextDecoder()
   let buffer = ''
+  let firstChunkLogged = false
 
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Stream ended at ${formatTime(performance.now())}s, total frames: ${sseFrameCount}`)
+      break
+    }
+
+    if (!firstChunkLogged && value) {
+      console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] FIRST CHUNK at ${formatTime(performance.now())}s, bytes: ${value.length}`)
+      firstChunkLogged = true
+    }
 
     buffer += decoder.decode(value, { stream: true })
     const parts = buffer.split('\n\n')
@@ -136,6 +154,14 @@ export async function* sendMessageStream(sessionId: number, message: MessageCrea
       if (dataString) {
         try {
           const data = JSON.parse(dataString)
+          sseFrameCount++
+
+          // Log first few frames and every 50th frame
+          if (sseFrameCount <= 5 || sseFrameCount % 50 === 0) {
+            const preview = data.delta ? data.delta.substring(0, 20) : JSON.stringify(data).substring(0, 50)
+            console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Frame #${sseFrameCount} at ${formatTime(performance.now())}s: event=${eventType}, data=${preview}...`)
+          }
+
           yield { event: eventType, data }
         } catch (e) {
           console.error('Failed to parse SSE data JSON:', e)

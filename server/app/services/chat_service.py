@@ -1,14 +1,24 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import re
+import time
+import logging
 from app.models.chat import ChatSession, Message
 from app.models.persona import Persona
 from app.models.llm import LLMConfig
 from app.schemas import chat as chat_schemas
 from datetime import datetime
 
+# SSE Debug logger
+sse_logger = logging.getLogger("sse_debug")
+sse_logger.setLevel(logging.DEBUG)
+if not sse_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('[SSE %(asctime)s.%(msecs)03d] %(message)s', datefmt='%H:%M:%S'))
+    sse_logger.addHandler(handler)
+
 from openai import AsyncOpenAI
-from openai.types.responses import ResponseTextDeltaEvent
+from openai.types.responses import ResponseTextDeltaEvent, ResponseReasoningSummaryTextDeltaEvent
 from agents import Agent, Runner, set_default_openai_client, set_default_openai_api
 from agents.items import ReasoningItem
 from agents.stream_events import RunItemStreamEvent
@@ -275,11 +285,39 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     THINK_END = "</think>"
     enable_thinking = message_in.enable_thinking
 
+    # SSE timing debug
+    sse_start_time = time.perf_counter()
+    sse_frame_count = 0
+    sse_first_frame_logged = False
+    sse_logger.debug(f"[SESSION {session_id}] Starting LLM stream...")
+    
     try:
         result = Runner.run_streamed(agent, agent_messages)
+        sse_logger.debug(f"[SESSION {session_id}] Runner.run_streamed returned at {time.perf_counter() - sse_start_time:.3f}s")
         
         async for event in result.stream_events():
-            # Handle reasoning item events (from models with native reasoning support)
+            elapsed = time.perf_counter() - sse_start_time
+            if not sse_first_frame_logged:
+                sse_logger.debug(f"[SESSION {session_id}] FIRST EVENT at {elapsed:.3f}s - type: {type(event).__name__}")
+                sse_first_frame_logged = True
+            
+            # PRIORITY 1: Handle streaming reasoning delta events (REAL-TIME)
+            # This catches reasoning tokens as they stream, BEFORE reasoning_item_created
+            if event.type == "raw_response_event" and isinstance(event.data, ResponseReasoningSummaryTextDeltaEvent):
+                if enable_thinking:
+                    reasoning_delta = event.data.delta
+                    if reasoning_delta:
+                        full_thinking_content += reasoning_delta
+                        sse_frame_count += 1
+                        sse_logger.debug(f"[SESSION {session_id}] YIELD thinking_delta #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_delta[:30]}...")
+                        yield {
+                            "event": "thinking",
+                            "data": {"delta": reasoning_delta}
+                        }
+                continue
+            
+            # PRIORITY 2: Handle reasoning item events (SUMMARY - arrives after all deltas)
+            # Keep this for models that don't support streaming reasoning
             if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
                 if enable_thinking and isinstance(event.item, ReasoningItem):
                     # Extract reasoning content from the raw item
@@ -304,6 +342,8 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                     
                     if reasoning_text:
                         full_thinking_content += reasoning_text
+                        sse_frame_count += 1
+                        sse_logger.debug(f"[SESSION {session_id}] YIELD thinking #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_text[:30]}...")
                         yield {
                             "event": "thinking",
                             "data": {"delta": reasoning_text}
@@ -326,6 +366,8 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                 if start_idx > 0:
                                     msg_delta = buffer[:start_idx]
                                     saved_content += msg_delta
+                                    sse_frame_count += 1
+                                    sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {msg_delta[:30]}...")
                                     yield {
                                         "event": "message",
                                         "data": {"delta": msg_delta}
@@ -351,6 +393,8 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                 else:
                                     # Yield all
                                     saved_content += buffer
+                                    sse_frame_count += 1
+                                    sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {buffer[:30]}...")
                                     yield {"event": "message", "data": {"delta": buffer}}
                                     buffer = ""
                         else:
