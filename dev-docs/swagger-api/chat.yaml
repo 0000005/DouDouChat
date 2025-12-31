@@ -1,0 +1,330 @@
+openapi: 3.1.0
+info:
+  title: DouDouChat - Chat API
+  description: OpenAPI specification for the chat module
+  version: 1.0.0
+paths:
+  /chat/sessions:
+    get:
+      summary: Read Sessions
+      description: Get all chat sessions.
+      operationId: read_sessions_chat_sessions_get
+      parameters:
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSessionRead'
+                title: Response Read Sessions Chat Sessions Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Create Session
+      description: Create a new chat session.
+      operationId: create_session_chat_sessions_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSessionCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chat/sessions/{session_id}:
+    patch:
+      summary: Update Session
+      description: Update a chat session (e.g. title).
+      operationId: update_session_chat_sessions__session_id__patch
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSessionUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Session
+      description: Soft delete a chat session.
+      operationId: delete_session_chat_sessions__session_id__delete
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Session Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /chat/sessions/{session_id}/messages:
+    get:
+      summary: Read Messages
+      description: Get messages for a specific session.
+      operationId: read_messages_chat_sessions__session_id__messages_get
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Session Id
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MessageRead'
+                title: Response Read Messages Chat Sessions  Session Id  Messages
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Send Message
+      description: Send a message to a session and get the AI response.
+      operationId: send_message_chat_sessions__session_id__messages_post
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Session Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageRead'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    ChatSessionCreate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+          default: 新对话
+        persona_id:
+          type: integer
+          title: Persona Id
+      type: object
+      required:
+      - persona_id
+      title: ChatSessionCreate
+    ChatSessionRead:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+          default: 新对话
+        persona_id:
+          type: integer
+          title: Persona Id
+        id:
+          type: integer
+          title: Id
+        create_time:
+          type: string
+          format: date-time
+          title: Create Time
+        update_time:
+          type: string
+          format: date-time
+          title: Update Time
+        deleted:
+          type: boolean
+          title: Deleted
+      type: object
+      required:
+      - persona_id
+      - id
+      - create_time
+      - update_time
+      - deleted
+      title: ChatSessionRead
+    ChatSessionUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+      type: object
+      title: ChatSessionUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    MessageCreate:
+      properties:
+        content:
+          type: string
+          title: Content
+      type: object
+      required:
+      - content
+      title: MessageCreate
+    MessageRead:
+      properties:
+        role:
+          type: string
+          title: Role
+        content:
+          type: string
+          title: Content
+        persona_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Persona Id
+        id:
+          type: integer
+          title: Id
+        session_id:
+          type: integer
+          title: Session Id
+        create_time:
+          type: string
+          format: date-time
+          title: Create Time
+        update_time:
+          type: string
+          format: date-time
+          title: Update Time
+        deleted:
+          type: boolean
+          title: Deleted
+      type: object
+      required:
+      - role
+      - content
+      - id
+      - session_id
+      - create_time
+      - update_time
+      - deleted
+      title: MessageRead
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

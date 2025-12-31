@@ -38,8 +38,10 @@
 *   **Framework:** FastAPI
 *   **Agent Framework:** [OpenAI Swarm](https://github.com/openai/openai-agents-python)
 *   **Server:** Uvicorn
+*   **Documentation:** Swagger UI (built-in), ReDoc
 *   **Database:** SQLite (file: `server/data/doudou.db`) + SQLAlchemy + sqlite-vec (for vector search)
 *   **Data Validation:** Pydantic v2
+*   **Utilities:** python-multipart (for form data)
 *   **Structure:** Layered Architecture (API -> Service -> Models/Schemas)
 *   **API Prefix:** `/api`
 

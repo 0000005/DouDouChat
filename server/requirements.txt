@@ -6,3 +6,4 @@ sqlalchemy
 httpx
 openai
 openai-agents
+python-multipart

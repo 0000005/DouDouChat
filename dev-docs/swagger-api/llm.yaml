@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: DouDouChat - Llm API
+  description: OpenAPI specification for the llm module
+  version: 1.0.0
+paths:
+  /llm/config:
+    get:
+      summary: Get Llm Config
+      description: Get the current LLM configuration.
+      operationId: get_llm_config_llm_config_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LLMConfig'
+    put:
+      summary: Update Llm Config
+      description: Update or create the LLM configuration.
+      operationId: update_llm_config_llm_config_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LLMConfigUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LLMConfig'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LLMConfig:
+      properties:
+        base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Url
+        api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Api Key
+        model_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Name
+          default: gpt-3.5-turbo
+        id:
+          type: integer
+          title: Id
+        create_time:
+          type: string
+          format: date-time
+          title: Create Time
+        update_time:
+          type: string
+          format: date-time
+          title: Update Time
+        deleted:
+          type: boolean
+          title: Deleted
+      type: object
+      required:
+      - id
+      - create_time
+      - update_time
+      - deleted
+      title: LLMConfig
+    LLMConfigUpdate:
+      properties:
+        base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Url
+        api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Api Key
+        model_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Name
+          default: gpt-3.5-turbo
+      type: object
+      title: LLMConfigUpdate
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

@@ -1,0 +1,278 @@
+openapi: 3.1.0
+info:
+  title: DouDouChat - Persona API
+  description: OpenAPI specification for the persona module
+  version: 1.0.0
+paths:
+  /persona/:
+    get:
+      summary: Read Personas
+      description: Retrieve personas.
+      operationId: read_personas_persona__get
+      parameters:
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Persona'
+                title: Response Read Personas Persona  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Create Persona
+      description: Create new persona.
+      operationId: create_persona_persona__post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonaCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Persona'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /persona/{persona_id}:
+    get:
+      summary: Read Persona
+      description: Get persona by ID.
+      operationId: read_persona_persona__persona_id__get
+      parameters:
+      - name: persona_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Persona Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Persona'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      summary: Update Persona
+      description: Update a persona.
+      operationId: update_persona_persona__persona_id__put
+      parameters:
+      - name: persona_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Persona Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonaUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Persona'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Persona
+      description: Delete a persona.
+      operationId: delete_persona_persona__persona_id__delete
+      parameters:
+      - name: persona_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Persona Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Persona'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    Persona:
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          title: Name
+          description: 角色名称
+        description:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Description
+          description: 角色描述
+        system_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: System Prompt
+          description: 系统提示词
+        is_preset:
+          type: boolean
+          title: Is Preset
+          description: 是否为系统预设
+          default: false
+        id:
+          type: integer
+          title: Id
+        create_time:
+          type: string
+          format: date-time
+          title: Create Time
+        update_time:
+          type: string
+          format: date-time
+          title: Update Time
+        deleted:
+          type: boolean
+          title: Deleted
+      type: object
+      required:
+      - name
+      - id
+      - create_time
+      - update_time
+      - deleted
+      title: Persona
+    PersonaCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          title: Name
+          description: 角色名称
+        description:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Description
+          description: 角色描述
+        system_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: System Prompt
+          description: 系统提示词
+        is_preset:
+          type: boolean
+          title: Is Preset
+          description: 是否为系统预设
+          default: false
+      type: object
+      required:
+      - name
+      title: PersonaCreate
+    PersonaUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Name
+        description:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Description
+        system_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: System Prompt
+        is_preset:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Preset
+      type: object
+      title: PersonaUpdate
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

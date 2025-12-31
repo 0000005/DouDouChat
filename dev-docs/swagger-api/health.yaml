@@ -1,0 +1,16 @@
+openapi: 3.1.0
+info:
+  title: DouDouChat - Health API
+  description: OpenAPI specification for the health module
+  version: 1.0.0
+paths:
+  /health/health:
+    get:
+      summary: Health Check
+      operationId: health_check_health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
