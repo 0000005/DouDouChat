@@ -10,6 +10,7 @@ class MessageBase(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+    enable_thinking: bool = False  # 是否启用思考模式
 
 class MessageRead(MessageBase):
     id: int

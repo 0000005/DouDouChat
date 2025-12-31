@@ -9,6 +9,8 @@ from datetime import datetime
 from openai import AsyncOpenAI
 from openai.types.responses import ResponseTextDeltaEvent
 from agents import Agent, Runner, set_default_openai_client, set_default_openai_api
+from agents.items import ReasoningItem
+from agents.stream_events import RunItemStreamEvent
 
 # --- Session Services ---
 
@@ -255,6 +257,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     )
 
     full_ai_content = ""
+    full_thinking_content = ""
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     finish_reason = "stop"
 
@@ -263,11 +266,44 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     is_thinking = False
     THINK_START = "<think>"
     THINK_END = "</think>"
+    enable_thinking = message_in.enable_thinking
 
     try:
         result = Runner.run_streamed(agent, agent_messages)
         
         async for event in result.stream_events():
+            # Handle reasoning item events (from models with native reasoning support)
+            if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
+                if enable_thinking and isinstance(event.item, ReasoningItem):
+                    # Extract reasoning content from the raw item
+                    raw_item = event.item.raw_item
+                    reasoning_text = ""
+                    
+                    # 1. Handle GLM-style summary list
+                    if hasattr(raw_item, 'summary') and raw_item.summary:
+                        for summary_item in raw_item.summary:
+                            if hasattr(summary_item, 'text'):
+                                reasoning_text += summary_item.text
+                            elif isinstance(summary_item, dict):
+                                reasoning_text += summary_item.get('text', '')
+                    
+                    # 2. Handle standard content field
+                    elif hasattr(raw_item, 'content') and raw_item.content:
+                        reasoning_text = raw_item.content
+                    
+                    # 3. Handle dict-style
+                    elif isinstance(raw_item, dict):
+                        reasoning_text = raw_item.get('content', '') or raw_item.get('summary', '')
+                    
+                    if reasoning_text:
+                        full_thinking_content += reasoning_text
+                        yield {
+                            "event": "thinking",
+                            "data": {"delta": reasoning_text}
+                        }
+                continue
+            
+            # Handle text delta events (with <think> tag parsing for models like DeepSeek-R1)
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
                 delta = event.data.delta
                 if delta:
@@ -287,6 +323,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                     }
                                 buffer = buffer[start_idx + len(THINK_START):]
                                 is_thinking = True
+                                # If thinking mode disabled, skip thinking content silently
                             else:
                                 # Check partial tag
                                 partial_len = 0
@@ -309,8 +346,8 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                             # Look for </think>
                             end_idx = buffer.find(THINK_END)
                             if end_idx != -1:
-                                # Yield content before tag as thinking
-                                if end_idx > 0:
+                                # Yield content before tag as thinking (only if enabled)
+                                if end_idx > 0 and enable_thinking:
                                     yield {
                                         "event": "thinking",
                                         "data": {"delta": buffer[:end_idx]}
@@ -327,18 +364,19 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                 if partial_len > 0:
                                     to_yield = buffer[:-partial_len]
                                     buffer = buffer[-partial_len:]
-                                    if to_yield:
+                                    if to_yield and enable_thinking:
                                         yield {"event": "thinking", "data": {"delta": to_yield}}
                                     break
                                 else:
-                                    yield {"event": "thinking", "data": {"delta": buffer}}
+                                    if enable_thinking:
+                                        yield {"event": "thinking", "data": {"delta": buffer}}
                                     buffer = ""
         
         # Flush remaining buffer
         if buffer:
-            if is_thinking:
+            if is_thinking and enable_thinking:
                 yield {"event": "thinking", "data": {"delta": buffer}}
-            else:
+            elif not is_thinking:
                 yield {"event": "message", "data": {"delta": buffer}}
 
     except Exception as e:
@@ -356,7 +394,12 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         full_ai_content = f"[Error: {error_message}]"
 
     # 5. Save AI Response once finished
-    ai_msg.content = full_ai_content if full_ai_content else "[No response]"
+    final_content = full_ai_content
+    # If standard reasoning was captured but not already in content via tags
+    if full_thinking_content and "<think>" not in final_content:
+        final_content = f"<think>{full_thinking_content}</think>{final_content}"
+        
+    ai_msg.content = final_content if final_content else "[No response]"
     db_session.update_time = datetime.now()
     db.commit()
     db.refresh(ai_msg)

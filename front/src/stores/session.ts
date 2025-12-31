@@ -146,7 +146,7 @@ export const useSessionStore = defineStore('session', () => {
         }
     }
 
-    const sendMessage = async (content: string) => {
+    const sendMessage = async (content: string, enableThinking: boolean = false) => {
         if (!currentSessionId.value) return
 
         const sessionId = currentSessionId.value
@@ -176,7 +176,7 @@ export const useSessionStore = defineStore('session', () => {
         messagesMap.value[sessionId].push(assistantMsg.value)
 
         try {
-            const stream = ChatAPI.sendMessageStream(sessionId, { content })
+            const stream = ChatAPI.sendMessageStream(sessionId, { content, enable_thinking: enableThinking })
 
             for await (const { event, data } of stream) {
                 const msgIndex = messagesMap.value[sessionId].findIndex(m => m.id === assistantMsgId)

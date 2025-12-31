@@ -29,6 +29,7 @@ export interface Message {
 
 export interface MessageCreate {
   content: string
+  enable_thinking?: boolean
 }
 
 export async function getSessions(skip: number = 0, limit: number = 100): Promise<ChatSession[]> {
@@ -123,7 +124,7 @@ export async function* sendMessageStream(sessionId: number, message: MessageCrea
       const lines = part.split('\n')
       let eventType = 'message'
       let dataString = ''
-      
+
       for (const line of lines) {
         if (line.startsWith('event: ')) {
           eventType = line.slice(7).trim()
@@ -137,9 +138,9 @@ export async function* sendMessageStream(sessionId: number, message: MessageCrea
           const data = JSON.parse(dataString)
           yield { event: eventType, data }
         } catch (e) {
-            console.error('Failed to parse SSE data JSON:', e)
-            // Fallback for non-JSON data if any (though backend sends JSON)
-            yield { event: eventType, data: dataString }
+          console.error('Failed to parse SSE data JSON:', e)
+          // Fallback for non-JSON data if any (though backend sends JSON)
+          yield { event: eventType, data: dataString }
         }
       }
     }

@@ -1,10 +1,12 @@
 import { ref, computed } from 'vue'
 import { useSessionStore, type Message } from '@/stores/session'
+import { useThinkingModeStore } from '@/stores/thinkingMode'
 
 export { type Message }
 
 export function useChat() {
     const store = useSessionStore()
+    const thinkingModeStore = useThinkingModeStore()
     const input = ref('')
     const isSubmitting = ref(false)
 
@@ -19,6 +21,10 @@ export function useChat() {
         return 'idle'
     })
 
+    // Thinking mode state
+    const isThinkingMode = computed(() => thinkingModeStore.isEnabled)
+    const toggleThinkingMode = () => thinkingModeStore.toggle()
+
     const handleSubmit = async (e?: Event | any) => {
         if (e && typeof e.preventDefault === 'function') {
             e.preventDefault()
@@ -30,7 +36,7 @@ export function useChat() {
 
         isSubmitting.value = true
         try {
-            await store.sendMessage(content)
+            await store.sendMessage(content, thinkingModeStore.isEnabled)
         } catch (error) {
             console.error(error)
         } finally {
@@ -42,6 +48,8 @@ export function useChat() {
         messages,
         input,
         status,
+        isThinkingMode,
+        toggleThinkingMode,
         handleSubmit
     }
 }

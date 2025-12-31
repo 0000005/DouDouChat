@@ -117,7 +117,7 @@ def test_send_message_thinking(client: TestClient, db: Session):
     mock_runner_result.stream_events = mock_stream_events
 
     with patch("app.services.chat_service.Runner.run_streamed", return_value=mock_runner_result):
-        response = client.post(f"/api/chat/sessions/{session_id}/messages", json={"content": "Hi"})
+        response = client.post(f"/api/chat/sessions/{session_id}/messages", json={"content": "Hi", "enable_thinking": True})
         assert response.status_code == 200
         
         events = []
