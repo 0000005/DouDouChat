@@ -61,14 +61,7 @@ const shouldShowLoader = computed(() => {
       </button>
       <h2 class="font-semibold text-lg flex-1">{{ currentSessionTitle }}</h2>
 
-      <!-- Thinking Mode Toggle -->
-      <button @click="toggleThinkingMode"
-        class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200" :class="isThinkingMode
-          ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'" :title="isThinkingMode ? '关闭思考模式' : '开启思考模式'">
-        <Brain :size="16" />
-        <span class="hidden sm:inline">{{ isThinkingMode ? '思考中' : '思考' }}</span>
-      </button>
+
     </header>
 
     <!-- Conversation Area -->
@@ -134,6 +127,15 @@ const shouldShowLoader = computed(() => {
             >
               <Globe :size="18" stroke-width="1.5" class="group-hover:text-blue-500 transition-colors" />
               <span class="text-sm font-medium">Search</span>
+            </button>
+
+            <button type="button" 
+              @click="toggleThinkingMode"
+              class="flex items-center gap-2 px-2 py-1.5 rounded-full transition-all duration-200 group"
+              :class="isThinkingMode ? 'text-purple-600 bg-purple-50 hover:bg-purple-100' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'"
+            >
+              <Brain :size="18" stroke-width="1.5" :class="isThinkingMode ? 'text-purple-600' : 'group-hover:text-purple-600 transition-colors'" />
+              <span class="text-sm font-medium">{{ isThinkingMode ? 'Thinking' : 'DeepThink' }}</span>
             </button>
 
             <div class="flex items-center gap-2 text-gray-500 select-none px-2">
