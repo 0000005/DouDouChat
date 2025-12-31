@@ -7,7 +7,7 @@ import {
   ConversationContent,
   ConversationScrollButton
 } from '@/components/ai-elements/conversation'
-import { Message, MessageContent } from '@/components/ai-elements/message'
+import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import {
   PromptInput,
   PromptInputTextarea,
@@ -85,7 +85,7 @@ const shouldShowLoader = computed(() => {
                 </Reasoning>
 
                 <MessageContent class="leading-relaxed" v-if="msg.content">
-                  {{ msg.content }}
+                  <MessageResponse :content="msg.content" />
                 </MessageContent>
               </div>
             </Message>
