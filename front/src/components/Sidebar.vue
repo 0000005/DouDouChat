@@ -268,6 +268,7 @@ onMounted(async () => {
               编辑好友
             </DropdownMenuItem>
             <DropdownMenuItem 
+              v-if="!friend.is_preset"
               @click.stop="openDeleteFriendDialog(friend.id)" 
               class="text-red-600 focus:text-red-600 cursor-pointer"
             >
