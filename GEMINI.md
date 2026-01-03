@@ -112,4 +112,8 @@ The project is currently in the **active development phase**.
     *   **Virtual Environment:** A virtual environment is located at `server/venv/`.
     *   **Run Server:** Execute `server\venv\Scripts\python -m uvicorn app.main:app --reload` within the `server` directory to start the backend with auto-reload.
     *   **Database Operations:** Use the available `db-util` tools (`list_tables`, `execute_sql`) to inspect and modify the SQLite database.
-    *   **Unit Testing:** Run tests using `server\venv\Scripts\python -m pytest server/tests`.
+    *   **UI Design:** **所有的 UI 界面必须高度参考微信 (WeChat) 的视觉风格和交互体验。** 这包括但不限于：
+    *   配色方案（如微信绿、浅灰色渐变背景等）。
+    *   布局（侧边栏、对话列表、聊天窗口的排布）。
+    *   交互细节（点击反馈、对话气泡样式等）。
+*   **Unit Testing:** Run tests using `server\venv\Scripts\python -m pytest server/tests`.
