@@ -11,6 +11,10 @@ class ChatSession(Base):
     create_time = Column(DateTime, default=func.now(), nullable=False)
     update_time = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     deleted = Column(Boolean, default=False, nullable=False)
+    # 是否已经生成记忆
+    memory_generated = Column(Boolean, default=False, nullable=False)
+    # 最后一条消息的时间
+    last_message_time = Column(DateTime, nullable=True)
 
     # Relationships
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")

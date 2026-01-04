@@ -237,8 +237,10 @@ async def send_message(db: Session, session_id: int, message_in: chat_schemas.Me
     )
     db.add(ai_msg)
     
-    # Update session update_time
-    db_session.update_time = datetime.now()
+    # Update session update_time and last_message_time
+    now = datetime.now()
+    db_session.update_time = now
+    db_session.last_message_time = now
     
     db.commit()
     db.refresh(ai_msg)
@@ -509,7 +511,9 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     # 5. Save AI Response once finished
     # Only save the cleaned message content (excluding reasoning)
     ai_msg.content = saved_content if saved_content else "[No response]"
-    db_session.update_time = datetime.now()
+    now = datetime.now()
+    db_session.update_time = now
+    db_session.last_message_time = now
     db.commit()
     db.refresh(ai_msg)
 

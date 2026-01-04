@@ -38,9 +38,12 @@ class ChatSessionRead(ChatSessionBase):
     create_time: datetime
     update_time: datetime
     deleted: bool
+    memory_generated: bool = False
+    last_message_time: Optional[datetime] = None
     
     # Optional: include messages if needed in list/detail view
     # messages: List[MessageRead] = []
 
     class Config:
         from_attributes = True
+
