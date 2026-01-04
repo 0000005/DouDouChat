@@ -32,10 +32,11 @@
 
 ## 3. 改造路线图 (Roadmap)
 
-### Phase 0: 基础设施与环境准备
-- **代码物理归属**：将 `mem-system/memobase_server` 下的代码复制到 `server/app/vendor/memobase_server`。
-- **依赖对齐**：将 `numpy`, `sqlite-vec`, `structlog`, `tiktoken`, `typeguard` 等必要依赖合并至主项目 `requirements.txt`。
-- **配置项扩展**：在 `server/app/core/config.py` 的 `Settings` 类中添加 `MEMOBASE_*` 相关配置字段。
+### Phase 0: 基础设施与环境准备 (Completed ✅)
+- [x] **代码物理归属**：将 `mem-system/memobase_server` 下的代码复制到 `server/app/vendor/memobase_server`。
+- [x] **依赖对齐**：将 `numpy`, `sqlite-vec`, `structlog`, `tiktoken`, `typeguard` 等必要依赖合并至主项目 `requirements.txt`。
+- [x] **配置项扩展**：在 `server/app/core/config.py` 的 `Settings` 类中添加 `MEMOBASE_*` 相关配置字段。
+- [x] 统一依赖管理的方式，将 `mem-system` 的依赖管理方式与主项目对齐。
 
 ### Phase 1: 核心模块去副作用化 (Decoupling)
 - **重构 `connectors.py`**：
