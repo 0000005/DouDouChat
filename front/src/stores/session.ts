@@ -140,6 +140,34 @@ export const useSessionStore = defineStore('session', () => {
         selectFriend,
         sendMessage,
         fetchFriendMessages,
-        clearFriendMessages
+        clearFriendMessages,
+        startNewSession: async () => {
+            if (!currentFriendId.value) return
+
+            // Prevent multiple consecutive new sessions
+            const messages = messagesMap.value[currentFriendId.value]
+            if (messages && messages.length > 0) {
+                const lastMsg = messages[messages.length - 1]
+                if (lastMsg.role === 'system' && lastMsg.content === '新会话') {
+                    return
+                }
+            }
+
+            try {
+                await ChatAPI.createSession({ friend_id: currentFriendId.value })
+                // Add system message manually to the local list
+                if (!messagesMap.value[currentFriendId.value]) {
+                    messagesMap.value[currentFriendId.value] = []
+                }
+                messagesMap.value[currentFriendId.value].push({
+                    id: Date.now(),
+                    role: 'system',
+                    content: '新会话',
+                    createdAt: Date.now()
+                })
+            } catch (error) {
+                console.error('Failed to start new session:', error)
+            }
+        }
     }
 })

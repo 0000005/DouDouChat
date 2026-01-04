@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
-import { Menu, Plus, Mic, Smile, MoreHorizontal, Brain } from 'lucide-vue-next'
+import { Menu, Plus, Mic, Smile, MoreHorizontal, Brain, MessageSquarePlus } from 'lucide-vue-next'
 import {
   Conversation,
   ConversationContent,
@@ -81,6 +81,12 @@ const handleToggleThinking = () => {
     showToast.value = false
   }, 2000)
 }
+
+const handleNewChat = async () => {
+  await sessionStore.startNewSession()
+  // Scroll to bottom handles automatically by ConversationScrollButton or watch logic if exists,
+  // but usually new messages trigger scroll.
+}
 </script>
 
 <template>
@@ -118,7 +124,10 @@ const handleToggleThinking = () => {
       <Conversation v-else class="h-full w-full">
         <ConversationContent class="messages-content">
           <template v-for="(msg, index) in messages" :key="msg.id">
-            <div class="message-wrapper" :class="msg.role === 'user' ? 'message-user' : 'message-assistant'">
+            <div v-if="msg.role === 'system'" class="message-system">
+              <span>{{ msg.content }}</span>
+            </div>
+            <div v-else class="message-wrapper" :class="msg.role === 'user' ? 'message-user' : 'message-assistant'">
               <!-- Avatar -->
               <div class="message-avatar">
                 <img :src="msg.role === 'user' ? getUserAvatar() : getAssistantAvatar()" alt="Avatar" />
@@ -161,6 +170,9 @@ const handleToggleThinking = () => {
         </button>
         <button class="toolbar-btn" title="文件">
           <Plus :size="22" />
+        </button>
+        <button class="toolbar-btn" title="新会话" @click="handleNewChat">
+          <MessageSquarePlus :size="22" />
         </button>
       </div>
 
@@ -340,6 +352,22 @@ const handleToggleThinking = () => {
 
 .reasoning-block {
   max-width: 100%;
+}
+
+.message-system {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 16px 0;
+  color: #999;
+  font-size: 12px;
+  width: 100%;
+}
+
+.message-system span {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px 12px;
+  border-radius: 12px;
 }
 
 /* Input Area */
