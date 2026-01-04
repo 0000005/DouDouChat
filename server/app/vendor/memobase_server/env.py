@@ -172,44 +172,66 @@ class Config:
         return config_dict
 
     @classmethod
-    def load_config(cls) -> "Config":
-        if not os.path.exists("config.yaml"):
-            overwrite_config = {}
-        else:
-            with open("config.yaml") as f:
-                overwrite_config = yaml.safe_load(f)
-                LOG.info(f"Load ./config.yaml")
+    def load_config(cls, config_dict: dict = None) -> "Config":
+        """
+        Load configuration with the following priority:
+        1. config_dict (if provided)
+        2. Environment variables (MEMOBASE_*)
+        3. config.yaml (if exists)
+        4. Default values
+        """
+        final_config_dict = {}
+        
+        # 1. Load from config.yaml if it exists
+        if os.path.exists("config.yaml"):
+            try:
+                with open("config.yaml") as f:
+                    file_config = yaml.safe_load(f)
+                    if file_config:
+                        final_config_dict.update(file_config)
+                        LOG.info("Loaded config from ./config.yaml")
+            except Exception as e:
+                LOG.warning(f"Failed to load config.yaml: {e}")
 
-        # Process environment variables
-        overwrite_config = cls._process_env_vars(overwrite_config)
+        # 2. Process environment variables (overrides file)
+        final_config_dict = cls._process_env_vars(final_config_dict)
 
-        # Filter out any keys from overwrite_config that aren't in the dataclass
+        # 3. Apply provided config_dict (overrides environment)
+        if config_dict:
+            final_config_dict.update(config_dict)
+
+        # Filter out any keys that aren't in the dataclass
         fields = {field.name for field in dataclasses.fields(cls)}
-        filtered_config = {k: v for k, v in overwrite_config.items() if k in fields}
-        overwrite_config = cls(**filtered_config)
-        LOG.info(f"{overwrite_config}")
-        return overwrite_config
+        filtered_config = {k: v for k, v in final_config_dict.items() if k in fields}
+        
+        config_obj = cls(**filtered_config)
+        # LOG.info(f"Configuration initialized: {config_obj}")
+        return config_obj
 
-    def __post_init__(self):
+    def validate(self):
+        """Validate the configuration when the SDK is actually started."""
         assert self.llm_api_key is not None, "llm_api_key is required"
         if self.enable_event_embedding:
-            if self.embedding_api_key is None and (
-                self.llm_style == self.embedding_provider == "openai"
-            ):
-                # default to llm config if embedding_api_key is not set
-                self.embedding_api_key = self.llm_api_key
-                self.embedding_base_url = self.llm_base_url
             assert (
                 self.embedding_api_key is not None
             ), "embedding_api_key is required for event embedding"
 
             if self.embedding_provider == "jina":
-                self.embedding_base_url = (
-                    self.embedding_base_url or "https://api.jina.ai/v1"
-                )
                 assert self.embedding_model in {
                     "jina-embeddings-v3",
                 }, "embedding_model must be one of the following: jina-embeddings-v3"
+
+    def __post_init__(self):
+        # We handle default value assignment for embedding_api_key here
+        # but defer strict assertions to validate()
+        if self.enable_event_embedding:
+            if self.embedding_api_key is None and (
+                self.llm_style == self.embedding_provider == "openai"
+                and self.llm_api_key is not None
+            ):
+                # default to llm config if embedding_api_key is not set
+                self.embedding_api_key = self.llm_api_key
+                self.embedding_base_url = self.llm_base_url
 
         if self.additional_user_profiles:
             [UserProfileTopic(**up) for up in self.additional_user_profiles]
@@ -289,6 +311,13 @@ else:
 ENCODER = tiktoken.encoding_for_model("gpt-4o")
 
 CONFIG = Config.load_config()
+
+
+def reinitialize_config(config_dict: dict = None):
+    """Reinitialize the global CONFIG object with new parameters."""
+    global CONFIG
+    CONFIG = Config.load_config(config_dict)
+    return CONFIG
 
 
 class ProjectLogger:

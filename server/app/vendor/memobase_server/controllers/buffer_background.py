@@ -273,3 +273,67 @@ async def flush_buffer_background_running(
                 user_id,
                 f"[background] Failed to release lock: {e}",
             )
+async def start_memobase_worker(interval_s: int = 60):
+    """
+    Continuous background worker that scans for idle buffers and processes them.
+    This replaces the need for external trigger in SDK mode.
+    """
+    TRACE_LOG.info("default", "system", "Memobase background worker started")
+    try:
+        while True:
+            try:
+                # 1. Scan for unique (user_id, project_id, blob_type) in idle state
+                with Session() as session:
+                    # We look for idle buffers that have been around for a while or reached threshold
+                    # For simplicity, we just find any user/project/blob_type that has idle buffers
+                    query = (
+                        session.query(
+                            BufferZone.user_id,
+                            BufferZone.project_id,
+                            BufferZone.blob_type,
+                            func.sum(BufferZone.token_size).label("total_tokens")
+                        )
+                        .filter(BufferZone.status == BufferStatus.idle)
+                        .group_by(BufferZone.user_id, BufferZone.project_id, BufferZone.blob_type)
+                        .all()
+                    )
+
+                for user_id, project_id, blob_type, total_tokens in query:
+                    # Check if it meets the criteria to flush (either interval passed or size reached)
+                    # For a simple background worker, we can just flush anything that is idle
+                    # or apply some logic here.
+                    
+                    # Logic here: if total_tokens > CONFIG.max_chat_blob_buffer_token_size OR time passed
+                    # But since this is a background worker, we can just trigger it.
+                    
+                    # Convert UUID to string for the controller methods
+                    u_id = str(user_id)
+                    p_id = str(project_id)
+                    b_type = BlobType(blob_type)
+
+                    TRACE_LOG.info(p_id, u_id, f"Worker triggering flush for {b_type} (tokens: {total_tokens})")
+                    
+                    # Get all buffer IDs for this group
+                    with Session() as session:
+                        buffer_ids = [
+                            str(row.id) for row in session.query(BufferZone.id)
+                            .filter(
+                                BufferZone.user_id == user_id,
+                                BufferZone.project_id == project_id,
+                                BufferZone.blob_type == blob_type,
+                                BufferZone.status == BufferStatus.idle
+                            ).all()
+                        ]
+                    
+                    if buffer_ids:
+                        # This will handle locking and background execution for this specific user/blob_type
+                        await flush_buffer_by_ids_in_background(u_id, p_id, b_type, buffer_ids)
+
+            except Exception as e:
+                TRACE_LOG.error("default", "system", f"Error in background worker loop: {e}\n{traceback.format_exc()}")
+            
+            await asyncio.sleep(interval_s)
+            
+    except asyncio.CancelledError:
+        TRACE_LOG.info("default", "system", "Memobase background worker is stopping...")
+        raise

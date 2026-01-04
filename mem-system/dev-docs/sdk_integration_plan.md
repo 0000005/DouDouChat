@@ -38,19 +38,19 @@
 - [x] **配置项扩展**：在 `server/app/core/config.py` 的 `Settings` 类中添加 `MEMOBASE_*` 相关配置字段。
 - [x] 统一依赖管理的方式，将 `mem-system` 的依赖管理方式与主项目对齐。
 
-### Phase 1: 核心模块去副作用化 (Decoupling)
-- **重构 `connectors.py`**：
+### Phase 1: 核心模块去副作用化 (Decoupling) ✅
+- [x] **重构 `connectors.py`**：
     - 将 `Session`、`DB_ENGINE` 设为 `None`。
     - 移除模块级的 `create_all()`。
     - 实现全局初始化入口。
-- **重构 `env.py`**：
+- [x] **重构 `env.py`**：
     - 允许外部通过 `Config(**params)` 直接实例化。
     - 确保不再强制搜索本地 `config.yaml`。
 
-### Phase 2: 生命周期与后台任务适配 (Runtime)
-- **挂载点设计**：在主项目的 `lifespan` 钩子中增加 SDK 初始化调用。
-- **Worker 整合**：
-    - 导出 `process_buffer_background` 任务。
+### Phase 2: 生命周期与后台任务适配 (Runtime) ✅
+- [x] **挂载点设计**：在主项目的 `lifespan` 钩子中增加 SDK 初始化调用。
+- [x] **Worker 整合**：
+    - 导出 `process_buffer_background` 任务 (在 `buffer_background.py` 中实现了 `start_memobase_worker`)。
     - 确保该任务能够响应 `CancelledError` 实现优雅退出。
 
 ### Phase 3: SDK 桥接服务层开发 (The Bridge)
