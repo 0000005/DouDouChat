@@ -189,6 +189,81 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /chat/friends/{friend_id}/messages:
+    get:
+      summary: Read Friend Messages
+      description: 'Get all messages for a specific friend across all sessions.
+
+        This provides a WeChat-style merged chat history view.'
+      operationId: read_friend_messages_chat_friends__friend_id__messages_get
+      parameters:
+      - name: friend_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Friend Id
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 200
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MessageRead'
+                title: Response Read Friend Messages Chat Friends  Friend Id  Messages
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Send Message To Friend
+      description: Send a message to a friend. This will find or create an appropriate
+        session.
+      operationId: send_message_to_friend_chat_friends__friend_id__messages_post
+      parameters:
+      - name: friend_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Friend Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
     ChatSessionCreate:

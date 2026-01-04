@@ -1,0 +1,305 @@
+openapi: 3.1.0
+info:
+  title: DouDouChat - Embedding API
+  description: OpenAPI specification for the embedding module
+  version: 1.0.0
+paths:
+  /embedding-settings/:
+    get:
+      summary: Read Embedding Settings
+      description: Retrieve embedding settings.
+      operationId: read_embedding_settings_embedding_settings__get
+      parameters:
+      - name: skip
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+          title: Skip
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmbeddingSetting'
+                title: Response Read Embedding Settings Embedding Settings  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      summary: Create Embedding Setting
+      description: Create new embedding setting.
+      operationId: create_embedding_setting_embedding_settings__post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingSettingCreate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingSetting'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /embedding-settings/{id}:
+    get:
+      summary: Read Embedding Setting
+      description: Get embedding setting by ID.
+      operationId: read_embedding_setting_embedding_settings__id__get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingSetting'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      summary: Update Embedding Setting
+      description: Update an embedding setting.
+      operationId: update_embedding_setting_embedding_settings__id__put
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingSettingUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingSetting'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      summary: Delete Embedding Setting
+      description: Delete an embedding setting.
+      operationId: delete_embedding_setting_embedding_settings__id__delete
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingSetting'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    EmbeddingSetting:
+      properties:
+        embedding_provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Provider
+          default: openai
+        embedding_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Api Key
+        embedding_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Base Url
+        embedding_dim:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Embedding Dim
+          default: 1024
+        embedding_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Model
+          default: BAAI/bge-m3
+        embedding_max_token_size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Embedding Max Token Size
+          default: 8000
+        id:
+          type: integer
+          title: Id
+        create_time:
+          type: string
+          format: date-time
+          title: Create Time
+        update_time:
+          type: string
+          format: date-time
+          title: Update Time
+        deleted:
+          type: boolean
+          title: Deleted
+      type: object
+      required:
+      - id
+      - create_time
+      - update_time
+      - deleted
+      title: EmbeddingSetting
+    EmbeddingSettingCreate:
+      properties:
+        embedding_provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Provider
+          default: openai
+        embedding_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Api Key
+        embedding_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Base Url
+        embedding_dim:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Embedding Dim
+          default: 1024
+        embedding_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Model
+          default: BAAI/bge-m3
+        embedding_max_token_size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Embedding Max Token Size
+          default: 8000
+      type: object
+      title: EmbeddingSettingCreate
+    EmbeddingSettingUpdate:
+      properties:
+        embedding_provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Provider
+        embedding_api_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Api Key
+        embedding_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Base Url
+        embedding_dim:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Embedding Dim
+        embedding_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Model
+        embedding_max_token_size:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Embedding Max Token Size
+      type: object
+      title: EmbeddingSettingUpdate
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
