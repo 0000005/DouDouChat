@@ -124,11 +124,27 @@ The project is currently in the **active development phase**.
 
 ---
 
-# Memobase Server (`mem-system/`)
+# Memobase SDK (Memory System)
 
-"双轨长期记忆系统"的后端服务，为 LLM 应用提供持久化、上下文感知的记忆能力。
+"双轨长期记忆系统" (Dual-Track Long-Term Memory System) 现在作为嵌入式 SDK 集成在主后端服务中，为 LLM 应用提供持久化、上下文感知的记忆能力。
 
-- **Tech:** FastAPI (Python 3.12+) + SQLite + `sqlite-vec`
-- **Caching:** In-memory (无 Redis 依赖)
-- **Run:** `cd mem-system && uv sync && python -m uvicorn api:app --reload --port 8019`
+-   **Integration:** Embedded SDK (`server/app/vendor/memobase_server`)
+-   **Runtime:** 主 FastAPI 进程内运行 (Managed by `server/app/main.py` lifespan)
+-   **Database:** `server/data/memobase.db` (SQLite + sqlite-vec)
+-   **Configuration:** 统一通过主项目 `server/app/core/config.py` 管理
+
+### Configuration (Environment Variables)
+
+需要在 `.env` 或环境变量中配置记忆系统专用的 Key：
+
+*   `MEMOBASE_LLM_API_KEY`: 用于提取记忆的 LLM API Key
+*   `MEMOBASE_LLM_BASE_URL`: (可选) LLM Base URL
+*   `MEMOBASE_ENABLE_EVENT_EMBEDDING`: 是否启用向量检索 (Default: `True`)
+*   `MEMOBASE_EMBEDDING_API_KEY`: 用于向量化的 Embedding API Key
+*   `MEMOBASE_EMBEDDING_BASE_URL`: (可选) Embedding Base URL
+
+### Architecture
+此模块不再作为独立服务 (`mem-system`) 运行。
+*   **Bridge Layer**: `server/app/services/memo/bridge.py` 负责将主配置注入 SDK 并封装调用。
+*   **Background Worker**:  主服务启动时自动挂载后台任务，用于异步处理记忆提取和归档。
 
