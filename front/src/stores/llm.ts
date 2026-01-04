@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getLlmConfig, updateLlmConfig, type LLMConfigUpdate } from '@/api/llm'
+import { getLlmConfig, updateLlmConfig, testLlmConfig, type LLMConfigUpdate, type LLMTestResult } from '@/api/llm'
 
 export const useLlmStore = defineStore('llm', () => {
   const apiBaseUrl = ref('')
   const apiKey = ref('')
   const modelName = ref('gpt-3.5-turbo')
   const isLoading = ref(false)
+  const isTesting = ref(false)
   const error = ref<string | null>(null)
+  const testResult = ref<LLMTestResult | null>(null)
 
   async function fetchConfig() {
     isLoading.value = true
@@ -48,13 +50,37 @@ export const useLlmStore = defineStore('llm', () => {
     }
   }
 
+  async function testConfig(): Promise<LLMTestResult> {
+    isTesting.value = true
+    testResult.value = null
+    error.value = null
+    try {
+      const result = await testLlmConfig({
+        base_url: apiBaseUrl.value || null,
+        api_key: apiKey.value || null,
+        model_name: modelName.value || 'gpt-3.5-turbo'
+      })
+      testResult.value = result
+      return result
+    } catch (e: any) {
+      console.error('Failed to test LLM config:', e)
+      error.value = e.message || 'Test failed'
+      throw e
+    } finally {
+      isTesting.value = false
+    }
+  }
+
   return {
     apiBaseUrl,
     apiKey,
     modelName,
     isLoading,
+    isTesting,
     error,
+    testResult,
     fetchConfig,
-    saveConfig
+    saveConfig,
+    testConfig
   }
 })

@@ -104,3 +104,38 @@ def delete_embedding_setting(
         logger.warning(f"Failed to reload Memobase config: {e}")
 
     return item
+
+
+@router.post("/test")
+def test_embedding_config(config_in: EmbeddingSettingCreate) -> dict:
+    """
+    Test the Embedding configuration by sending a simple request.
+    Uses the provided configuration parameters instead of database values.
+    """
+    if not config_in.embedding_api_key:
+        raise HTTPException(status_code=400, detail="API Key is required for testing.")
+    
+    try:
+        from openai import OpenAI
+        
+        client = OpenAI(
+            api_key=config_in.embedding_api_key,
+            base_url=config_in.embedding_base_url if config_in.embedding_base_url else None
+        )
+        
+        response = client.embeddings.create(
+            model=config_in.embedding_model or "text-embedding-ada-002",
+            input="This is a test message for embedding.",
+        )
+        
+        embedding_dim = len(response.data[0].embedding) if response.data else 0
+        
+        return {
+            "success": True,
+            "message": "Embedding connection test successful!",
+            "model": response.model,
+            "dimension": embedding_dim
+        }
+    except Exception as e:
+        logger.error(f"Embedding test failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Embedding test failed: {str(e)}")

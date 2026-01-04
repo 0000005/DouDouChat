@@ -45,3 +45,37 @@ def update_llm_config(
         logger.warning(f"Failed to reload Memobase config: {e}")
         
     return config
+
+
+@router.post("/config/test")
+def test_llm_config(config_in: LLMConfigUpdate) -> dict:
+    """
+    Test the LLM configuration by sending a simple request.
+    Uses the provided configuration parameters instead of database values.
+    """
+    if not config_in.api_key:
+        raise HTTPException(status_code=400, detail="API Key is required for testing.")
+    
+    try:
+        from openai import OpenAI
+        
+        client = OpenAI(
+            api_key=config_in.api_key,
+            base_url=config_in.base_url if config_in.base_url else None
+        )
+        
+        response = client.chat.completions.create(
+            model=config_in.model_name or "gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Hi, this is a test message. Please respond with 'OK'."}],
+            max_tokens=10
+        )
+        
+        return {
+            "success": True,
+            "message": "LLM connection test successful!",
+            "model": response.model,
+            "response": response.choices[0].message.content if response.choices else None
+        }
+    except Exception as e:
+        logger.error(f"LLM test failed: {e}")
+        raise HTTPException(status_code=400, detail=f"LLM test failed: {str(e)}")

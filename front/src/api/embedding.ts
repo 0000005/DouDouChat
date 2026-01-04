@@ -60,3 +60,25 @@ export async function updateEmbeddingSetting(id: number, data: EmbeddingSettingU
     }
     return response.json()
 }
+
+export interface EmbeddingTestResult {
+    success: boolean
+    message: string
+    model?: string
+    dimension?: number
+}
+
+export async function testEmbeddingConfig(config: EmbeddingSettingCreate): Promise<EmbeddingTestResult> {
+    const response = await fetch('/api/embedding-settings/test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config),
+    })
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Test failed' }))
+        throw new Error(error.detail || 'Embedding test failed')
+    }
+    return response.json()
+}

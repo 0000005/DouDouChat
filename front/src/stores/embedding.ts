@@ -4,8 +4,10 @@ import {
     getEmbeddingSettings,
     createEmbeddingSetting,
     updateEmbeddingSetting,
+    testEmbeddingConfig,
     type EmbeddingSettingCreate,
-    type EmbeddingSettingUpdate
+    type EmbeddingSettingUpdate,
+    type EmbeddingTestResult
 } from '@/api/embedding'
 
 export const useEmbeddingStore = defineStore('embedding', () => {
@@ -18,7 +20,9 @@ export const useEmbeddingStore = defineStore('embedding', () => {
     const maxTokenSize = ref<number>(8000)
 
     const isLoading = ref(false)
+    const isTesting = ref(false)
     const error = ref<string | null>(null)
+    const testResult = ref<EmbeddingTestResult | null>(null)
 
     async function fetchConfig() {
         isLoading.value = true
@@ -88,6 +92,30 @@ export const useEmbeddingStore = defineStore('embedding', () => {
         }
     }
 
+    async function testConfig(): Promise<EmbeddingTestResult> {
+        isTesting.value = true
+        testResult.value = null
+        error.value = null
+        try {
+            const result = await testEmbeddingConfig({
+                embedding_provider: provider.value,
+                embedding_api_key: apiKey.value || null,
+                embedding_base_url: baseUrl.value || null,
+                embedding_dim: dim.value,
+                embedding_model: model.value,
+                embedding_max_token_size: maxTokenSize.value
+            })
+            testResult.value = result
+            return result
+        } catch (e: any) {
+            console.error('Failed to test embedding config:', e)
+            error.value = e.message || 'Test failed'
+            throw e
+        } finally {
+            isTesting.value = false
+        }
+    }
+
     return {
         id,
         provider,
@@ -97,8 +125,11 @@ export const useEmbeddingStore = defineStore('embedding', () => {
         model,
         maxTokenSize,
         isLoading,
+        isTesting,
         error,
+        testResult,
         fetchConfig,
-        saveConfig
+        saveConfig,
+        testConfig
     }
 })

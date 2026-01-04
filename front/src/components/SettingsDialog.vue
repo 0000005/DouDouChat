@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Eye, EyeOff, Loader2 } from 'lucide-vue-next'
+import { Eye, EyeOff, Loader2, CheckCircle2, XCircle } from 'lucide-vue-next'
 import { useLlmStore } from '@/stores/llm'
 import { useEmbeddingStore } from '@/stores/embedding'
 import { storeToRefs } from 'pinia'
@@ -27,7 +27,7 @@ defineProps<{
 const emit = defineEmits(['update:open'])
 
 const llmStore = useLlmStore()
-const { apiBaseUrl, apiKey, modelName, isLoading: isLlmLoading } = storeToRefs(llmStore)
+const { apiBaseUrl, apiKey, modelName, isLoading: isLlmLoading, isTesting: isLlmTesting } = storeToRefs(llmStore)
 
 const embeddingStore = useEmbeddingStore()
 const {
@@ -37,8 +37,13 @@ const {
     dim: embedDim,
     model: embedModel,
     maxTokenSize: embedMaxToken,
-    isLoading: isEmbedLoading
+    isLoading: isEmbedLoading,
+    isTesting: isEmbedTesting,
 } = storeToRefs(embeddingStore)
+
+// Testing state
+const testStatus = ref<'idle' | 'success' | 'error'>('idle')
+const testMessage = ref('')
 
 const activeTab = ref('llm')
 const showApiKey = ref(false)
@@ -64,6 +69,33 @@ const handleSave = async () => {
         console.error('Failed to save settings', error)
     }
 }
+
+const handleTest = async () => {
+    testStatus.value = 'idle'
+    testMessage.value = ''
+
+    try {
+        if (activeTab.value === 'llm') {
+            const result = await llmStore.testConfig()
+            testStatus.value = 'success'
+            testMessage.value = `${result.message} (Model: ${result.model})`
+        } else if (activeTab.value === 'embedding') {
+            const result = await embeddingStore.testConfig()
+            testStatus.value = 'success'
+            testMessage.value = `${result.message} (Dimension: ${result.dimension})`
+        }
+    } catch (e: any) {
+        testStatus.value = 'error'
+        testMessage.value = e.message || 'Test failed'
+    }
+}
+
+// Reset test status when switching tabs
+const originalSetTab = (tab: string) => {
+    activeTab.value = tab
+    testStatus.value = 'idle'
+    testMessage.value = ''
+}
 </script>
 
 <template>
@@ -72,17 +104,16 @@ const handleSave = async () => {
             <DialogTitle class="sr-only">设置</DialogTitle>
             <DialogDescription class="sr-only">应用配置界面</DialogDescription>
 
-            <!-- Sidebar -->
             <div class="w-[200px] bg-gray-50 border-r border-gray-200 p-4 flex flex-col gap-1">
                 <h3 class="font-semibold mb-4 px-2 text-lg">设置</h3>
                 <button class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors"
                     :class="activeTab === 'llm' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'"
-                    @click="activeTab = 'llm'">
+                    @click="originalSetTab('llm')">
                     LLM 设置
                 </button>
                 <button class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors"
                     :class="activeTab === 'embedding' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'"
-                    @click="activeTab = 'embedding'">
+                    @click="originalSetTab('embedding')">
                     向量化设置
                 </button>
             </div>
@@ -211,12 +242,27 @@ const handleSave = async () => {
                 </div>
 
                 <!-- Footer -->
-                <div class="p-4 border-t border-gray-100 flex justify-end gap-2 bg-white">
-                    <Button variant="outline" @click="$emit('update:open', false)">取消</Button>
-                    <Button @click="handleSave" :disabled="isLlmLoading || isEmbedLoading">
-                        <Loader2 v-if="isLlmLoading || isEmbedLoading" class="w-4 h-4 mr-2 animate-spin" />
-                        保存
-                    </Button>
+                <div class="p-4 border-t border-gray-100 bg-white">
+                    <!-- Test result display -->
+                    <div v-if="testStatus !== 'idle'" class="mb-3 flex items-center gap-2 text-sm">
+                        <CheckCircle2 v-if="testStatus === 'success'" class="w-4 h-4 text-green-500" />
+                        <XCircle v-else class="w-4 h-4 text-red-500" />
+                        <span :class="testStatus === 'success' ? 'text-green-600' : 'text-red-600'">
+                            {{ testMessage }}
+                        </span>
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        <Button variant="outline" @click="$emit('update:open', false)">取消</Button>
+                        <Button variant="outline" @click="handleTest" :disabled="isLlmTesting || isEmbedTesting">
+                            <Loader2 v-if="isLlmTesting || isEmbedTesting" class="w-4 h-4 mr-2 animate-spin" />
+                            测试
+                        </Button>
+                        <Button @click="handleSave" :disabled="isLlmLoading || isEmbedLoading">
+                            <Loader2 v-if="isLlmLoading || isEmbedLoading" class="w-4 h-4 mr-2 animate-spin" />
+                            保存
+                        </Button>
+                    </div>
                 </div>
             </div>
 
