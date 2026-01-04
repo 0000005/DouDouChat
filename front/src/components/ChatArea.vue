@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
-import { Menu, Plus, Mic, Smile, MoreHorizontal } from 'lucide-vue-next'
+import { Menu, Plus, Mic, Smile, MoreHorizontal, Brain } from 'lucide-vue-next'
 import {
   Conversation,
   ConversationContent,
@@ -64,17 +64,30 @@ const getAssistantAvatar = () => {
   }
   return 'https://api.dicebear.com/7.x/bottts/svg?seed=doudou'
 }
+
+// Toast Feedback Logic
+const showToast = ref(false)
+const toastMessage = ref('')
+let toastTimeout: ReturnType<typeof setTimeout> | null = null
+
+const handleToggleThinking = () => {
+  toggleThinkingMode()
+  // Toast text based on new state
+  toastMessage.value = isThinkingMode.value ? '已开启思考模式' : '思考模式已关闭'
+  showToast.value = true
+
+  if (toastTimeout) clearTimeout(toastTimeout)
+  toastTimeout = setTimeout(() => {
+    showToast.value = false
+  }, 2000)
+}
 </script>
 
 <template>
   <div class="wechat-chat-area">
     <!-- Header -->
     <header class="chat-header">
-      <button 
-        v-if="isSidebarCollapsed"
-        @click="emit('toggle-sidebar')"
-        class="mobile-menu-btn"
-      >
+      <button v-if="isSidebarCollapsed" @click="emit('toggle-sidebar')" class="mobile-menu-btn">
         <Menu :size="20" />
       </button>
       <h2 class="chat-title">{{ currentFriendName }}</h2>
@@ -90,12 +103,12 @@ const getAssistantAvatar = () => {
         <div class="wechat-logo">
           <svg viewBox="0 0 100 100" class="logo-svg">
             <g fill="#c8c8c8">
-              <ellipse cx="38" cy="45" rx="28" ry="24"/>
-              <ellipse cx="62" cy="55" rx="28" ry="24"/>
-              <circle cx="30" cy="42" r="4" fill="#f5f5f5"/>
-              <circle cx="46" cy="42" r="4" fill="#f5f5f5"/>
-              <circle cx="54" cy="58" r="3" fill="#e9e9e9"/>
-              <circle cx="70" cy="58" r="3" fill="#e9e9e9"/>
+              <ellipse cx="38" cy="45" rx="28" ry="24" />
+              <ellipse cx="62" cy="55" rx="28" ry="24" />
+              <circle cx="30" cy="42" r="4" fill="#f5f5f5" />
+              <circle cx="46" cy="42" r="4" fill="#f5f5f5" />
+              <circle cx="54" cy="58" r="3" fill="#e9e9e9" />
+              <circle cx="70" cy="58" r="3" fill="#e9e9e9" />
             </g>
           </svg>
         </div>
@@ -105,25 +118,16 @@ const getAssistantAvatar = () => {
       <Conversation v-else class="h-full w-full">
         <ConversationContent class="messages-content">
           <template v-for="(msg, index) in messages" :key="msg.id">
-            <div 
-              class="message-wrapper"
-              :class="msg.role === 'user' ? 'message-user' : 'message-assistant'"
-            >
+            <div class="message-wrapper" :class="msg.role === 'user' ? 'message-user' : 'message-assistant'">
               <!-- Avatar -->
               <div class="message-avatar">
-                <img 
-                  :src="msg.role === 'user' ? getUserAvatar() : getAssistantAvatar()" 
-                  alt="Avatar"
-                />
+                <img :src="msg.role === 'user' ? getUserAvatar() : getAssistantAvatar()" alt="Avatar" />
               </div>
 
               <!-- Message Bubble -->
               <div class="message-bubble-container">
-                <Reasoning 
-                  v-if="msg.role === 'assistant' && msg.thinkingContent"
-                  :is-streaming="status === 'submitted' && index === messages.length - 1"
-                  class="reasoning-block"
-                >
+                <Reasoning v-if="msg.role === 'assistant' && msg.thinkingContent"
+                  :is-streaming="status === 'submitted' && index === messages.length - 1" class="reasoning-block">
                   <ReasoningTrigger />
                   <ReasoningContent :content="msg.thinkingContent" />
                 </Reasoning>
@@ -132,7 +136,7 @@ const getAssistantAvatar = () => {
                 <div v-if="isMessageLoading(msg, index)" class="message-bubble loading-bubble">
                   <Loader class="h-5 w-5 text-gray-400" />
                 </div>
-                
+
                 <!-- Normal message content -->
                 <div v-else-if="msg.content" class="message-bubble">
                   <MessageContent>
@@ -159,25 +163,33 @@ const getAssistantAvatar = () => {
           <Plus :size="22" />
         </button>
       </div>
-      
+
       <PromptInput class="input-box" @submit="handleSubmit">
-        <PromptInputTextarea 
-          v-model="input" 
-          placeholder="输入消息..."
-          class="input-textarea"
-        />
+        <PromptInputTextarea v-model="input" placeholder="输入消息..." class="input-textarea" />
         <div class="input-footer">
-          <button class="voice-btn" title="语音">
-            <Mic :size="18" />
-          </button>
-          <PromptInputSubmit 
-            :status="status" 
-            :loading="status === 'submitted'"
-            class="send-btn"
-          />
+          <div class="footer-left">
+            <button class="voice-btn" title="语音">
+              <Mic :size="18" />
+            </button>
+
+            <!-- Thinking Mode Toggle -->
+            <button type="button" class="thinking-btn" :class="{ 'active': isThinkingMode }"
+              @click="handleToggleThinking" title="深度思考">
+              <Brain :size="18" />
+            </button>
+          </div>
+
+          <PromptInputSubmit :status="status" :loading="status === 'submitted'" class="send-btn" />
         </div>
       </PromptInput>
     </div>
+
+    <!-- Toast Feedback -->
+    <Transition name="fade">
+      <div v-if="showToast" class="toast-feedback">
+        {{ toastMessage }}
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -389,6 +401,12 @@ const getAssistantAvatar = () => {
   border-top: 1px solid #f0f0f0;
 }
 
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .voice-btn {
   padding: 6px;
   border: none;
@@ -400,6 +418,28 @@ const getAssistantAvatar = () => {
 
 .voice-btn:hover {
   color: #666;
+}
+
+.thinking-btn {
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.thinking-btn:hover {
+  color: #666;
+}
+
+.thinking-btn.active {
+  color: #07c160;
+}
+
+.thinking-label {
+  display: none;
 }
 
 .send-btn {
@@ -420,6 +460,34 @@ const getAssistantAvatar = () => {
 .send-btn:disabled {
   background: #a0d8b7;
   cursor: not-allowed;
+}
+
+/* Toast Feedback */
+.toast-feedback {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 1000;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -40%);
 }
 
 /* Override ai-elements styles */
