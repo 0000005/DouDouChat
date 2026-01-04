@@ -53,16 +53,17 @@
     - 导出 `process_buffer_background` 任务 (在 `buffer_background.py` 中实现了 `start_memobase_worker`)。
     - 确保该任务能够响应 `CancelledError` 实现优雅退出。
 
-### Phase 3: SDK 桥接服务层开发 (The Bridge)
-- **定义 `MemoService` 类**：
+### Phase 3: SDK 桥接服务层开发 (The Bridge) ✅
+- [x] **定义 `MemoService` 类**：
     - 提供静态方法映射常用的记忆功能（Profile 获取、Context 检索、Blob 插入）。
     - 封装 `project_id` 的默认逻辑（从 Space 上下文获取）。
     - 负责所有 `async` 函数的 `Promise` 解包。
 
-### Phase 4: 数据库自动化管理 (Migrations)
-- **迁移逻辑集成**：
+### Phase 4: 数据库自动化管理 (Migrations) ✅
+- [x] **迁移逻辑集成**：
     - 使用 Alembic 独立管理 `memobase.db`。
-    - 在主后端初始化脚本中，增加对 `vendor/memobase_server` 路径下的 Alembic 升级命令调用。
+    - 在主后端初始化脚本中，增加对 `vendor/memobase_server` env 下的 Alembic 升级命令调用。
+
 
 ---
 
