@@ -278,21 +278,18 @@ async def _archive_session_async(
     调用 Memobase SDK 插入聊天记录并触发摘要提取。
     """
     from app.services.memo.bridge import MemoService, MemoServiceException
+    from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
     from app.vendor.memobase_server.models.blob import BlobType
     from datetime import datetime
     
-    # 硬编码用户和空间 ID（单用户模式，未来需从 Session/Context 获取）
-    user_id = "default_user"
-    space_id = "default"
-    
     try:
         # 1. 确保用户存在
-        await MemoService.ensure_user(user_id=user_id, space_id=space_id)
+        await MemoService.ensure_user(user_id=DEFAULT_USER_ID, space_id=DEFAULT_SPACE_ID)
         
         # 2. 插入聊天记录到 buffer，包含 metadata
         result = await MemoService.insert_chat(
-            user_id=user_id,
-            space_id=space_id,
+            user_id=DEFAULT_USER_ID,
+            space_id=DEFAULT_SPACE_ID,
             messages=openai_messages,
             fields={
                 "friend_id": str(friend_id),
@@ -305,8 +302,8 @@ async def _archive_session_async(
         
         # 3. 立即触发 buffer flush 以生成摘要
         await MemoService.trigger_buffer_flush(
-            user_id=user_id,
-            space_id=space_id,
+            user_id=DEFAULT_USER_ID,
+            space_id=DEFAULT_SPACE_ID,
             blob_type=BlobType.chat
         )
         logger.info(f"[Archive Async] Session {session_id} buffer flush triggered. Memory generation complete.")

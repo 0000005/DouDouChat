@@ -21,10 +21,14 @@ from app.vendor.memobase_server.controllers.context import get_user_context
 from app.vendor.memobase_server.controllers.blob import insert_blob
 from app.vendor.memobase_server.controllers.event_gist import search_user_event_gists, get_user_event_gists
 from app.vendor.memobase_server.controllers.buffer import flush_buffer
+from app.vendor.memobase_server.controllers.project import (
+    get_project_profile_config_string, 
+    update_project_profile_config
+)
 
 # SDK Models
 from app.vendor.memobase_server.models.response import (
-    UserProfilesData, ContextData, IdData, UserData, UserEventGistsData, IdsData, UserEventsData
+    UserProfilesData, ContextData, IdData, UserData, UserEventGistsData, IdsData, UserEventsData, ProfileConfigData
 )
 from app.vendor.memobase_server.models.blob import BlobData, BlobType, ChatBlob, OpenAICompatibleMessage
 from app.vendor.memobase_server.models.utils import PromiseUnpackError
@@ -394,4 +398,22 @@ class MemoService:
         promise = await flush_buffer(
             user_id=user_id, project_id=space_id, blob_type=blob_type
         )
+        cls._unwrap(promise)
+
+    # --- Project Config Management ---
+
+    @classmethod
+    async def get_profile_config(cls, space_id: str) -> ProfileConfigData:
+        """
+        Retrieves the profile configuration (YAML) for a given space.
+        """
+        promise = await get_project_profile_config_string(project_id=space_id)
+        return cls._unwrap(promise)
+
+    @classmethod
+    async def update_profile_config(cls, space_id: str, profile_config: str) -> None:
+        """
+        Updates the profile configuration (YAML) for a given space.
+        """
+        promise = await update_project_profile_config(project_id=space_id, profile_config=profile_config)
         cls._unwrap(promise)

@@ -14,7 +14,7 @@
 
 ## 2. 后端开发计划 (Backend)
 
-延续 `passive_session_memory.md` 中的设计，使用 `user_id="default_user"` 和 `space_id="default"` 作为当前默认上下文。
+延续 `passive_session_memory.md` 中的设计，使用基于 `"default_user"` 生成的确定性 UUID (`uuid5`) 作为 `user_id`，并使用 SDK 默认的 `__root__` 作为 `space_id`。
 
 ### 2.1 API 接口设计
 
@@ -70,7 +70,7 @@
 ### Backend
 - [ ] **Bridge 重新实现**: 补全 `MemoService` 中缺少的项目配置读写接口。
 - [ ] **Router 开发**: 新建 `server/app/api/endpoints/profile.py` 并注册路由。
-- [ ] **单工模式适配**: 接口内部默认填充 `user_id="default_user"`。
+- [ ] **单工模式适配**: 接口内部默认填充基于 `default_user` 的确定性 UUID。
 
 ### Frontend
 - [ ] **组件开发**: 实现 `ProfileDialog.vue` 核心交互。

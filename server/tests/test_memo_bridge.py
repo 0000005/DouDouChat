@@ -144,5 +144,40 @@ class TestMemoServiceIngestion:
             mock_insert.assert_called_once()
 
 
+
+class TestMemoServiceProjectConfig:
+    """Tests for project configuration functions."""
+
+    @pytest.mark.asyncio
+    async def test_get_profile_config_calls_sdk(self):
+        """Test get_profile_config properly calls the SDK controller."""
+        from app.services.memo.bridge import MemoService
+        from app.vendor.memobase_server.models.utils import Promise
+        from app.vendor.memobase_server.models.response import ProfileConfigData
+        
+        mock_config = ProfileConfigData(profile_config="topic: Test")
+        
+        with patch('app.services.memo.bridge.get_project_profile_config_string', new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = Promise.resolve(mock_config)
+            
+            result = await MemoService.get_profile_config(space_id="space-1")
+            
+            assert result.profile_config == "topic: Test"
+            mock_get.assert_called_once_with(project_id="space-1")
+
+    @pytest.mark.asyncio
+    async def test_update_profile_config_calls_sdk(self):
+        """Test update_profile_config properly calls the SDK controller."""
+        from app.services.memo.bridge import MemoService
+        from app.vendor.memobase_server.models.utils import Promise
+        
+        with patch('app.services.memo.bridge.update_project_profile_config', new_callable=AsyncMock) as mock_update:
+            mock_update.return_value = Promise.resolve(None)
+            
+            await MemoService.update_profile_config(space_id="space-1", profile_config="new config")
+            
+            mock_update.assert_called_once_with(project_id="space-1", profile_config="new config")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

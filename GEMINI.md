@@ -83,17 +83,74 @@ Unlike traditional AI chat tools, WeAgentChat simulates a WeChat-like multi-dime
 
 ## Current Status & Structure
 The project is currently in the **active development phase**.
-*   **Root Directory:** `d:\workspace\DouDouChat`
-*   **`front/`**: Vue 3 frontend with WeChat-style UI.
-*   **`server/`**: FastAPI backend scaffold initialized and running.
-    *   `app/main.py`: Entry point.
-    *   `app/api/endpoints/`: Route handlers (e.g., `health.py`, `chat.py`).
-    *   `app/services/`: Business logic layer.
-    *   `app/models/`: Database entities (SQLAlchemy).
-    *   `app/schemas/`: Data validation models (Pydantic).
-    *   `app/core/`: Configuration (Pydantic Settings).
-    *   `data/doudou.db`: SQLite database file (initialized).
-*   **`dev-docs/`**: Contains development stories and planning documents.
+
+*   **Root Directory:** `e:\workspace\code\DouDouChat`
+
+---
+
+### 🎨 Frontend (`front/`)
+Vue 3 frontend implemented with a focus on WeChat's aesthetic.
+
+#### 📁 `src/` (Core Source)
+*   **`components/`**: UI logic and views.
+    *   `ai-elements/`: AI-native components (Reasoning, Tool, Canvas, etc.) from `ai-elements-vue`.
+    *   `ui/`: Base UI primitives (via shadcn-vue, e.g., HoverCard, Dialog, Button).
+    *   `ChatArea.vue`: Main message terminal (supports SSE events & reasoning).
+    *   `Sidebar.vue`: Session list and search.
+    *   `IconSidebar.vue`: Vertical icon menu (WeChat style).
+    *   `SettingsDialog.vue`: Management of LLM, Memory, and System settings.
+*   **`stores/`**: Pinia state management.
+    *   `session.ts`: Chat session buffers, SSE event parsing, and message history.
+    *   `friend.ts`: Persona/Friend metadata and state.
+    *   `llm.ts` & `embedding.ts`: Global config synchronization with backend.
+    *   `settings.ts`: System-wide settings (e.g., memory expiration).
+*   **`api/`**: Strongly typed REST & SSE clients.
+    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`.
+*   **`composables/`**: Reusable Vue Composition API logic (e.g., `useChat.ts`).
+*   **`lib/`**: Utility functions (e.g., `utils.ts` for Tailwind/CSS classes).
+
+#### 📁 Configuration
+*   `vite.config.js`, `tailwind.config.js`, `components.json` (shadcn config).
+
+---
+
+### ⚙️ Backend (`server/`)
+FastAPI backend with a modular service-oriented architecture.
+
+#### 📁 `app/` (Application Logic)
+*   **`api/endpoints/`**: FastAPI routers.
+    *   `chat.py`: Real-time SSE streaming.
+    *   `profile.py` & `friend.py`: User profile and AI persona management.
+    *   `settings.py`: System configuration API.
+    *   `llm.py` & `embedding.py`: AI model provider management.
+*   **`services/`**: Business logic layer.
+    *   `chat_service.py`: LLM orchestration, message persistence, and memory RAG.
+    *   `memo/`: Memory system bridge.
+        *   `bridge.py`: Interface to the embedded Memobase SDK.
+    *   `settings_service.py`: Config defaults and DB persistence.
+*   **`models/`**: SQLAlchemy ORM definitions (SQLite target).
+    *   `chat.py`, `friend.py`, `system_setting.py`, `llm.py`, `embedding.py`.
+*   **`schemas/`**: Pydantic data validation and serialization.
+*   **`db/`**: Database initialization (`init_db.py`) and session management.
+*   **`utils/`**: Generic backend utilities (e.g., logging, async helpers).
+*   **`vendor/`**: Third-party modules embedded as SDKs.
+    *   **`memobase_server/`**: The core Memory Engine (Event Extraction, RAG).
+
+#### 📁 Infrastructure
+*   **`alembic/`**: Production-ready database migrations.
+*   **`data/`**: Storage for `.db` files.
+    *   `doudou.db`: Primary application data.
+    *   `memobase.db`: Memory/Vector storage.
+*   **`tests/`**: Pytest suite (e.g., `test_memo_bridge.py`, `test_chat.py`).
+
+---
+
+### 📄 Documentation & Planning (`dev-docs/`)
+*   **`userStroy/`**: Business logic and feature requirements (e.g., `passive_session_memory.md`).
+*   **`coding/`**: Granular implementation plans (Divided by Epics).
+*   **`swagger-api/`**: API definitions (Legacy/Reference).
+
+---
 
 ## Development Roadmap
 1.  Core chat functionality with WeChat-style UI
