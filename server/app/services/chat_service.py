@@ -139,9 +139,12 @@ def get_sessions_by_friend(db: Session, friend_id: int) -> List[ChatSession]:
 
 def get_or_create_session_for_friend(db: Session, friend_id: int) -> ChatSession:
     """
-    Get the most recent session for a friend, or create a new one if none exists.
+    获取好友最近的会话，如果已超时或不存在则创建新会话。
     """
-    # Find the most recent session for this friend
+    from app.services.settings_service import SettingsService
+    timeout = SettingsService.get_setting(db, "session", "passive_timeout", 1800)
+
+    # 查找受该好友最近的一个非删除会话
     session = (
         db.query(ChatSession)
         .filter(ChatSession.friend_id == friend_id, ChatSession.deleted == False)
@@ -150,12 +153,53 @@ def get_or_create_session_for_friend(db: Session, friend_id: int) -> ChatSession
     )
     
     if session:
-        return session
+        # 判定是否超时
+        if session.last_message_time:
+            # 兼容：如果 last_message_time 还是 None，且已存在会话，可能需要根据 update_time 判定或直接返回
+            elapsed = (datetime.now() - session.last_message_time).total_seconds()
+            if elapsed > timeout:
+                # 触发归档逻辑（异步或标记）
+                archive_session(db, session.id)
+                session = None # 强制进入下面的创建逻辑
+        else:
+            # 如果没有 last_message_time，可能是一个刚创建的空会话，直接使用
+            return session
+
+    if not session:
+        # 创建新会话
+        from app.schemas.chat import ChatSessionCreate
+        session_in = ChatSessionCreate(friend_id=friend_id)
+        session = create_session(db, session_in=session_in)
     
-    # Create a new session if none exists
-    from app.schemas.chat import ChatSessionCreate
-    session_in = ChatSessionCreate(friend_id=friend_id)
-    return create_session(db, session_in=session_in)
+    return session
+
+def archive_session(db: Session, session_id: int):
+    """
+    将指定会话归档并准备生成记忆。
+    - 消息数 < 2 的会话跳过记忆生成，仅标记为已处理。
+    """
+    logger = logging.getLogger(__name__)
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session or session.memory_generated:
+        return
+
+    # 边界检查：消息数 < 2 跳过
+    msg_count = db.query(Message).filter(
+        Message.session_id == session_id, 
+        Message.deleted == False
+    ).count()
+    
+    if msg_count < 2:
+        session.memory_generated = True  # 标记为已处理但无需生成记忆
+        db.commit()
+        logger.info(f"Session {session_id} skipped (msg_count={msg_count}).")
+        return
+
+    # TODO: 真正调用记忆系统 SDK 提取摘要
+    # 目前仅做标记
+    session.memory_generated = True
+    db.commit()
+    logger.info(f"Session {session_id} archived.")
 
 async def send_message(db: Session, session_id: int, message_in: chat_schemas.MessageCreate) -> Message:
     """

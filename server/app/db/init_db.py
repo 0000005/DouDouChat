@@ -72,3 +72,12 @@ def init_db():
         logger.error(f"Error initializing Memobase static data: {e}")
         # Memobase is critical for memory features, raise to halt startup
         raise
+
+    # --- 5. Initialize System Settings ---
+    logger.info("Initializing system settings...")
+    try:
+        from app.services.settings_service import SettingsService
+        SettingsService.initialize_defaults()
+        logger.info("System settings initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error initializing system settings: {e}")
