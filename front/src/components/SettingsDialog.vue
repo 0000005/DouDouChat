@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import {
     Dialog,
     DialogContent,
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Loader2, CheckCircle2, XCircle } from 'lucide-vue-next'
 import { useLlmStore } from '@/stores/llm'
 import { useEmbeddingStore } from '@/stores/embedding'
+import { useSettingsStore } from '@/stores/settings'
 import { storeToRefs } from 'pinia'
 import {
     Select,
@@ -41,6 +42,15 @@ const {
     isTesting: isEmbedTesting,
 } = storeToRefs(embeddingStore)
 
+const settingsStore = useSettingsStore()
+const { passiveTimeout, isLoading: isSettingsLoading, isSaving: isSettingsSaving } = storeToRefs(settingsStore)
+
+// 会话超时时间（分钟），用于界面显示
+const passiveTimeoutMinutes = computed({
+    get: () => Math.round(passiveTimeout.value / 60),
+    set: (val: number) => { passiveTimeout.value = val * 60 }
+})
+
 // Testing state
 const testStatus = ref<'idle' | 'success' | 'error'>('idle')
 const testMessage = ref('')
@@ -55,13 +65,15 @@ const toggleApiKeyVisibility = () => {
 onMounted(() => {
     llmStore.fetchConfig()
     embeddingStore.fetchConfig()
+    settingsStore.fetchSessionSettings()
 })
 
 const handleSave = async () => {
     try {
         await Promise.all([
             llmStore.saveConfig(),
-            embeddingStore.saveConfig()
+            embeddingStore.saveConfig(),
+            settingsStore.saveSessionSettings()
         ])
         emit('update:open', false)
     } catch (error) {
@@ -115,6 +127,11 @@ const originalSetTab = (tab: string) => {
                     :class="activeTab === 'embedding' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'"
                     @click="originalSetTab('embedding')">
                     向量化设置
+                </button>
+                <button class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    :class="activeTab === 'memory' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'"
+                    @click="originalSetTab('memory')">
+                    记忆设置
                 </button>
             </div>
 
@@ -239,6 +256,35 @@ const originalSetTab = (tab: string) => {
                             </div>
                         </div>
                     </template>
+
+                    <template v-if="activeTab === 'memory'">
+                        <div class="space-y-6">
+                            <div>
+                                <h3 class="text-lg font-medium">记忆设置</h3>
+                                <p class="text-sm text-gray-500">配置会话管理和记忆系统相关参数。</p>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div class="grid gap-2">
+                                    <label class="text-sm font-medium leading-none">
+                                        会话过期时间（分钟）
+                                    </label>
+                                    <Input v-model.number="passiveTimeoutMinutes" type="number" min="1" max="1440" placeholder="30" />
+                                    <p class="text-xs text-gray-500">
+                                        当与好友的最后一次聊天超过此时间后，系统会自动归档会话并生成记忆摘要。下次聊天将开启新会话。
+                                    </p>
+                                </div>
+
+                                <div class="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                                    <h4 class="text-sm font-medium text-gray-700 mb-2">当前配置</h4>
+                                    <div class="text-sm text-gray-600">
+                                        <p>• 会话过期时间：<span class="font-mono">{{ passiveTimeoutMinutes }}</span> 分钟（{{ passiveTimeout }} 秒）</p>
+                                        <p class="mt-1 text-xs text-gray-400">系统将在用户停止聊天后自动处理会话归档和记忆提取。</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
                 <!-- Footer -->
@@ -254,12 +300,12 @@ const originalSetTab = (tab: string) => {
 
                     <div class="flex justify-end gap-2">
                         <Button variant="outline" @click="$emit('update:open', false)">取消</Button>
-                        <Button variant="outline" @click="handleTest" :disabled="isLlmTesting || isEmbedTesting">
+                        <Button v-if="activeTab !== 'memory'" variant="outline" @click="handleTest" :disabled="isLlmTesting || isEmbedTesting">
                             <Loader2 v-if="isLlmTesting || isEmbedTesting" class="w-4 h-4 mr-2 animate-spin" />
                             测试
                         </Button>
-                        <Button @click="handleSave" :disabled="isLlmLoading || isEmbedLoading">
-                            <Loader2 v-if="isLlmLoading || isEmbedLoading" class="w-4 h-4 mr-2 animate-spin" />
+                        <Button @click="handleSave" :disabled="isLlmLoading || isEmbedLoading || isSettingsSaving">
+                            <Loader2 v-if="isLlmLoading || isEmbedLoading || isSettingsSaving" class="w-4 h-4 mr-2 animate-spin" />
                             保存
                         </Button>
                     </div>

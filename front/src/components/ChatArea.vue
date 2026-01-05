@@ -55,6 +55,46 @@ const isMessageLoading = (msg: any, index: number) => {
 
 const hasMessages = computed(() => messages.value.length > 0)
 
+// 检测是否需要显示会话分隔线（session_id 变化时）
+const shouldShowSessionDivider = (index: number): boolean => {
+  if (index === 0) return false // 第一条消息不显示分隔线
+  const currentMsg = messages.value[index]
+  const prevMsg = messages.value[index - 1]
+  
+  // 跳过 system 消息的检测（system 消息本身就是分隔线）
+  if (currentMsg.role === 'system') return false
+  
+  // 如果 sessionId 存在且不同，显示分隔线
+  if (currentMsg.sessionId && prevMsg.sessionId && currentMsg.sessionId !== prevMsg.sessionId) {
+    return true
+  }
+  return false
+}
+
+// 格式化会话时间戳（类似微信聊天记录中的时间显示）
+const formatSessionTime = (timestamp: number): string => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+  
+  const timeStr = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  
+  if (diffDays === 0) {
+    // 今天：显示时间
+    return timeStr
+  } else if (diffDays === 1) {
+    // 昨天
+    return `昨天 ${timeStr}`
+  } else if (diffDays < 7) {
+    // 一周内：显示星期几
+    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+    return `${weekdays[date.getDay()]} ${timeStr}`
+  } else {
+    // 超过一周：显示完整日期
+    return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ' ' + timeStr
+  }
+}
+
 // Get avatar for user/assistant
 const getUserAvatar = () => 'https://api.dicebear.com/7.x/avataaars/svg?seed=user123'
 const getAssistantAvatar = () => {
@@ -124,6 +164,11 @@ const handleNewChat = async () => {
       <Conversation v-else class="h-full w-full">
         <ConversationContent class="messages-content">
           <template v-for="(msg, index) in messages" :key="msg.id">
+            <!-- 会话分隔线（session_id 变化时显示） -->
+            <div v-if="shouldShowSessionDivider(index)" class="session-divider">
+              <span class="divider-time">{{ formatSessionTime(msg.createdAt) }}</span>
+            </div>
+            
             <div v-if="msg.role === 'system'" class="message-system">
               <span>{{ msg.content }}</span>
             </div>
@@ -373,6 +418,24 @@ const handleNewChat = async () => {
   background: rgba(0, 0, 0, 0.05);
   padding: 4px 12px;
   border-radius: 12px;
+}
+
+/* 会话分隔线 */
+.session-divider {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+  width: 100%;
+}
+
+.divider-time {
+  background: rgba(0, 0, 0, 0.06);
+  color: #888;
+  font-size: 11px;
+  padding: 4px 14px;
+  border-radius: 14px;
+  letter-spacing: 0.5px;
 }
 
 /* Input Area */
