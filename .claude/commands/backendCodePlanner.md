@@ -9,7 +9,7 @@ description: 分析后端开发需求
 - story 存放在 `./dev-docs/prd/epic_{epic编号}/stories/story_{epic编号}_{story编号}_{epic名称}.md`文件中。
 - 《数据库表设计文档》 存放在 `./dev-docs/prd/epic_{epic编号}/table_design_{epic编号}.md`文件中。
 - 所有表的概述信息保存在 `./dev-docs/db-design/summary.md`文件中
-- 后端开发文档保存在 `../dev-docs/coding/epic_{编号}/backend_{epic编号}_{story编号}.md`文件中。
+- 后端开发文档保存在 `./dev-docs/coding/epic_{编号}/backend_{epic编号}_{story编号}.md`文件中。
 - 前端开发文档保存在 `./dev-docs/coding/epic_{编号}/frontend_{epic编号}_{story编号}.md`文件中。
 
 ## 工作流程
@@ -23,7 +23,7 @@ description: 分析后端开发需求
    - 分析现有代码结构和架构模式
    - 评估当前系统的技术栈和框架选择
    - 识别与新需求相关的现有模块
-   - 如果和数据库相关，则查看`./dev-docs/db-design/summary.md`表信息，必要时使用数据库查询工具（mcp）获取信息。
+   - 如果和数据库相关，查看项目的数据库设计文档或使用数据库查询工具获取表结构信息。
 
 3. **架构设计**
    - 确定模块划分策略和职责边界
