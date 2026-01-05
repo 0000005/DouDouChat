@@ -8,7 +8,7 @@ import {
   ConversationContent,
   ConversationScrollButton
 } from '@/components/ai-elements/conversation'
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import {
   PromptInput,
   PromptInputTextarea,
@@ -20,6 +20,7 @@ import {
   ReasoningContent,
   ReasoningTrigger
 } from '@/components/ai-elements/reasoning'
+import ChatDrawerMenu from '@/components/ChatDrawerMenu.vue'
 import { useChat } from '@/composables/useChat'
 
 const props = defineProps({
@@ -60,10 +61,10 @@ const shouldShowSessionDivider = (index: number): boolean => {
   if (index === 0) return false // 第一条消息不显示分隔线
   const currentMsg = messages.value[index]
   const prevMsg = messages.value[index - 1]
-  
+
   // 跳过 system 消息的检测（system 消息本身就是分隔线）
   if (currentMsg.role === 'system') return false
-  
+
   // 如果 sessionId 存在且不同，显示分隔线
   if (currentMsg.sessionId && prevMsg.sessionId && currentMsg.sessionId !== prevMsg.sessionId) {
     return true
@@ -76,9 +77,9 @@ const formatSessionTime = (timestamp: number): string => {
   const date = new Date(timestamp)
   const now = new Date()
   const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-  
+
   const timeStr = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  
+
   if (diffDays === 0) {
     // 今天：显示时间
     return timeStr
@@ -127,6 +128,13 @@ const handleNewChat = async () => {
   // Scroll to bottom handles automatically by ConversationScrollButton or watch logic if exists,
   // but usually new messages trigger scroll.
 }
+
+// Drawer Menu State
+const drawerOpen = ref(false)
+
+const handleOpenDrawer = () => {
+  drawerOpen.value = true
+}
 </script>
 
 <template>
@@ -137,7 +145,7 @@ const handleNewChat = async () => {
         <Menu :size="20" />
       </button>
       <h2 class="chat-title">{{ currentFriendName }}</h2>
-      <button class="more-btn">
+      <button class="more-btn" @click="handleOpenDrawer">
         <MoreHorizontal :size="20" />
       </button>
     </header>
@@ -168,7 +176,7 @@ const handleNewChat = async () => {
             <div v-if="shouldShowSessionDivider(index)" class="session-divider">
               <span class="divider-time">{{ formatSessionTime(msg.createdAt) }}</span>
             </div>
-            
+
             <div v-if="msg.role === 'system'" class="message-system">
               <span>{{ msg.content }}</span>
             </div>
@@ -252,6 +260,9 @@ const handleNewChat = async () => {
         {{ toastMessage }}
       </div>
     </Transition>
+
+    <!-- Drawer Menu -->
+    <ChatDrawerMenu v-model:open="drawerOpen" />
   </div>
 </template>
 
@@ -486,7 +497,6 @@ const handleNewChat = async () => {
 
 .input-textarea:focus {
   box-shadow: none !important;
-  ring: none !important;
 }
 
 .input-footer {
