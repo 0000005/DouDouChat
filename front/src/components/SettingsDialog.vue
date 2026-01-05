@@ -8,10 +8,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Eye, EyeOff, Loader2, CheckCircle2, XCircle } from 'lucide-vue-next'
+import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, Plus, Trash2 } from 'lucide-vue-next'
 import { useLlmStore } from '@/stores/llm'
 import { useEmbeddingStore } from '@/stores/embedding'
 import { useSettingsStore } from '@/stores/settings'
+import { useMemoryStore } from '@/stores/memory'
 import { storeToRefs } from 'pinia'
 import {
     Select,
@@ -20,6 +21,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from '@/components/ui/accordion'
 
 defineProps<{
     open: boolean
@@ -43,7 +50,9 @@ const {
 } = storeToRefs(embeddingStore)
 
 const settingsStore = useSettingsStore()
-const { passiveTimeout, isLoading: isSettingsLoading, isSaving: isSettingsSaving } = storeToRefs(settingsStore)
+const { passiveTimeout, isSaving: isSettingsSaving } = storeToRefs(settingsStore)
+
+const memoryStore = useMemoryStore()
 
 // 会话超时时间（分钟），用于界面显示
 const passiveTimeoutMinutes = computed({
@@ -66,6 +75,7 @@ onMounted(() => {
     llmStore.fetchConfig()
     embeddingStore.fetchConfig()
     settingsStore.fetchSessionSettings()
+    memoryStore.fetchConfig()
 })
 
 const handleSave = async () => {
@@ -73,13 +83,25 @@ const handleSave = async () => {
         await Promise.all([
             llmStore.saveConfig(),
             embeddingStore.saveConfig(),
-            settingsStore.saveSessionSettings()
+            settingsStore.saveSessionSettings(),
+            memoryStore.saveConfig()
         ])
         emit('update:open', false)
     } catch (error) {
         // Error handling could be improved with a toast notification
         console.error('Failed to save settings', error)
     }
+}
+
+const handleAddTopic = () => {
+    memoryStore.profileConfig.topics.push({
+        topic: '新分类',
+        description: '请输入分类描述'
+    })
+}
+
+const handleRemoveTopic = (index: number) => {
+    memoryStore.profileConfig.topics.splice(index, 1)
 }
 
 const handleTest = async () => {
@@ -112,7 +134,7 @@ const originalSetTab = (tab: string) => {
 
 <template>
     <Dialog :open="open" @update:open="$emit('update:open', $event)">
-        <DialogContent class="sm:max-w-[700px] p-0 overflow-hidden flex h-[500px] gap-0">
+        <DialogContent class="sm:max-w-[750px] p-0 overflow-hidden flex h-[600px] gap-0">
             <DialogTitle class="sr-only">设置</DialogTitle>
             <DialogDescription class="sr-only">应用配置界面</DialogDescription>
 
@@ -258,31 +280,79 @@ const originalSetTab = (tab: string) => {
                     </template>
 
                     <template v-if="activeTab === 'memory'">
-                        <div class="space-y-6">
+                        <div class="space-y-8">
                             <div>
-                                <h3 class="text-lg font-medium">记忆设置</h3>
-                                <p class="text-sm text-gray-500">配置会话管理和记忆系统相关参数。</p>
+                                <h3 class="text-lg font-medium">记忆管理设置</h3>
+                                <p class="text-sm text-gray-500">配置会话管理和记忆关注维度。</p>
                             </div>
 
+                            <!-- Basic Configuration -->
                             <div class="space-y-4">
                                 <div class="grid gap-2">
                                     <label class="text-sm font-medium leading-none">
                                         会话过期时间（分钟）
                                     </label>
-                                    <Input v-model.number="passiveTimeoutMinutes" type="number" min="1" max="1440" placeholder="30" />
+                                    <Input v-model.number="passiveTimeoutMinutes" type="number" min="1" max="1440"
+                                        placeholder="30" />
                                     <p class="text-xs text-gray-500">
-                                        当与好友的最后一次聊天超过此时间后，系统会自动归档会话并生成记忆摘要。下次聊天将开启新会话。
+                                        当与好友的最后一次聊天超过此时间后，系统会自动归档会话并生成记忆摘要。
                                     </p>
                                 </div>
+                            </div>
 
+                            <!-- Schema Builder -->
+                            <div class="space-y-4 border-t pt-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="text-sm font-semibold">资料关注维度 (YAML Schema)</h4>
+                                        <p class="text-xs text-gray-500">定义系统自动提取记忆时关注的分类和维度。</p>
+                                    </div>
+                                    <Button variant="ghost" size="sm"
+                                        class="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                        @click="handleAddTopic">
+                                        <Plus class="w-4 h-4 mr-1" />
+                                        添加分类
+                                    </Button>
+                                </div>
 
+                                <Accordion type="single" collapsible class="w-full">
+                                    <AccordionItem v-for="(topic, index) in memoryStore.profileConfig.topics"
+                                        :key="index" :value="`item-${index}`"
+                                        class="border rounded-md px-3 mb-2 bg-white shadow-sm overflow-hidden">
+                                        <div class="flex items-center justify-between py-1">
+                                            <AccordionTrigger class="flex-1 hover:no-underline py-2">
+                                                <span class="text-sm font-medium">{{ topic.topic }}</span>
+                                            </AccordionTrigger>
+                                            <button class="ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                                @click.stop="handleRemoveTopic(index)">
+                                                <Trash2 :size="14" />
+                                            </button>
+                                        </div>
+                                        <AccordionContent class="pb-3 border-t pt-3 space-y-3">
+                                            <div class="grid gap-1.5">
+                                                <label class="text-xs font-medium text-gray-500">分类名称</label>
+                                                <Input v-model="topic.topic" class="h-8 text-sm" />
+                                            </div>
+                                            <div class="grid gap-1.5">
+                                                <label class="text-xs font-medium text-gray-500">提取引导说明</label>
+                                                <Input v-model="topic.description" class="h-8 text-sm"
+                                                    placeholder="描述此分类关注的信息点..." />
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
+
+                                <div v-if="memoryStore.profileConfig.topics.length === 0"
+                                    class="py-10 text-center border border-dashed rounded-md bg-gray-50/50">
+                                    <p class="text-sm text-gray-400">暂无维度定义，请点击上方按钮添加。</p>
+                                </div>
                             </div>
                         </div>
                     </template>
                 </div>
 
                 <!-- Footer -->
-                <div class="p-4 border-t border-gray-100 bg-white">
+                <div class="p-4 border-t border-gray-100 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                     <!-- Test result display -->
                     <div v-if="testStatus !== 'idle'" class="mb-3 flex items-center gap-2 text-sm">
                         <CheckCircle2 v-if="testStatus === 'success'" class="w-4 h-4 text-green-500" />
@@ -294,12 +364,14 @@ const originalSetTab = (tab: string) => {
 
                     <div class="flex justify-end gap-2">
                         <Button variant="outline" @click="$emit('update:open', false)">取消</Button>
-                        <Button v-if="activeTab !== 'memory'" variant="outline" @click="handleTest" :disabled="isLlmTesting || isEmbedTesting">
+                        <Button v-if="activeTab !== 'memory'" variant="outline" @click="handleTest"
+                            :disabled="isLlmTesting || isEmbedTesting">
                             <Loader2 v-if="isLlmTesting || isEmbedTesting" class="w-4 h-4 mr-2 animate-spin" />
                             测试
                         </Button>
                         <Button @click="handleSave" :disabled="isLlmLoading || isEmbedLoading || isSettingsSaving">
-                            <Loader2 v-if="isLlmLoading || isEmbedLoading || isSettingsSaving" class="w-4 h-4 mr-2 animate-spin" />
+                            <Loader2 v-if="isLlmLoading || isEmbedLoading || isSettingsSaving"
+                                class="w-4 h-4 mr-2 animate-spin" />
                             保存
                         </Button>
                     </div>

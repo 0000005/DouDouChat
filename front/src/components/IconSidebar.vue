@@ -1,22 +1,42 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { 
-  MessageCircle, 
-  Users, 
-  Star, 
+import { ref } from 'vue'
+import {
+  MessageCircle,
+  Users,
+  Star,
   FolderOpen,
   Link2,
-  Settings
+  Settings,
+  MoreHorizontal,
+  User
 } from 'lucide-vue-next'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 
-const props = defineProps<{
+defineProps<{
   activeTab: 'chat' | 'contacts' | 'favorites' | 'files' | 'mini-programs'
 }>()
 
 const emit = defineEmits<{
   (e: 'update:activeTab', value: string): void
   (e: 'open-settings'): void
+  (e: 'open-profile'): void
 }>()
+
+const isPopoverOpen = ref(false)
+
+const handleOpenProfile = () => {
+  isPopoverOpen.value = false
+  emit('open-profile')
+}
+
+const handleOpenSettings = () => {
+  isPopoverOpen.value = false
+  emit('open-settings')
+}
 
 const navItems = [
   { id: 'chat', icon: MessageCircle, label: '聊天' },
@@ -31,25 +51,15 @@ const navItems = [
   <aside class="wechat-icon-sidebar">
     <!-- User Avatar -->
     <div class="avatar-section">
-      <div class="avatar">
-        <img 
-          src="https://api.dicebear.com/7.x/avataaars/svg?seed=doudou" 
-          alt="User Avatar"
-          class="avatar-img"
-        />
+      <div class="avatar cursor-pointer" @click="emit('open-profile')">
+        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=doudou" alt="User Avatar" class="avatar-img" />
       </div>
     </div>
 
     <!-- Navigation Icons -->
     <nav class="nav-icons">
-      <button
-        v-for="item in navItems"
-        :key="item.id"
-        class="nav-btn"
-        :class="{ active: activeTab === item.id }"
-        :title="item.label"
-        @click="emit('update:activeTab', item.id)"
-      >
+      <button v-for="item in navItems" :key="item.id" class="nav-btn" :class="{ active: activeTab === item.id }"
+        :title="item.label" @click="emit('update:activeTab', item.id)">
         <component :is="item.icon" :size="22" :stroke-width="1.5" />
         <span v-if="item.id === 'chat'" class="unread-dot"></span>
       </button>
@@ -57,13 +67,29 @@ const navItems = [
 
     <!-- Bottom Actions -->
     <div class="bottom-actions">
-      <button 
-        class="nav-btn"
-        title="设置"
-        @click="emit('open-settings')"
-      >
-        <Settings :size="22" :stroke-width="1.5" />
-      </button>
+      <Popover v-model:open="isPopoverOpen">
+        <PopoverTrigger as-child>
+          <button class="nav-btn" title="更多">
+            <MoreHorizontal :size="22" :stroke-width="1.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="right" align="end" :side-offset="12" class="w-32 p-1 bg-[#3c3c3c] border-none shadow-xl">
+          <div class="flex flex-col gap-1">
+            <button
+              class="flex items-center gap-2 px-3 py-2 text-sm text-gray-200 hover:bg-[#4a4a4a] rounded-md transition-colors"
+              @click="handleOpenProfile">
+              <User :size="16" />
+              <span>个人资料</span>
+            </button>
+            <button
+              class="flex items-center gap-2 px-3 py-2 text-sm text-gray-200 hover:bg-[#4a4a4a] rounded-md transition-colors"
+              @click="handleOpenSettings">
+              <Settings :size="16" />
+              <span>设置</span>
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   </aside>
 </template>

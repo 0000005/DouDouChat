@@ -4,10 +4,12 @@ import IconSidebar from './components/IconSidebar.vue'
 import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
+import ProfileDialog from './components/ProfileDialog.vue'
 
 const isSidebarOpen = ref(true)
 const activeTab = ref('chat')
 const isSettingsOpen = ref(false)
+const isProfileOpen = ref(false)
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value
@@ -25,50 +27,34 @@ onMounted(() => {
   <div class="wechat-app">
     <!-- Icon Sidebar (always visible on desktop) -->
     <div class="icon-sidebar-container">
-      <IconSidebar 
-        :active-tab="activeTab" 
-        @update:activeTab="activeTab = $event"
-        @open-settings="isSettingsOpen = true"
-      />
+      <IconSidebar :active-tab="activeTab" @update:activeTab="activeTab = $event" @open-settings="isSettingsOpen = true"
+        @open-profile="isProfileOpen = true" />
     </div>
 
     <!-- Conversation List Sidebar -->
-    <div 
-      class="sidebar-container"
-      :class="{ collapsed: !isSidebarOpen }"
-    >
+    <div class="sidebar-container" :class="{ collapsed: !isSidebarOpen }">
       <Sidebar />
     </div>
 
     <!-- Mobile Sidebar Overlay (Only on small screens) -->
-    <div 
-      v-if="isSidebarOpen"
-      class="mobile-overlay md:hidden"
-      @click="isSidebarOpen = false"
-    >
-      <div 
-        class="mobile-sidebar"
-        @click.stop
-      >
-        <IconSidebar 
-          :active-tab="activeTab" 
-          @update:activeTab="activeTab = $event"
-          @open-settings="isSettingsOpen = true"
-        />
+    <div v-if="isSidebarOpen" class="mobile-overlay md:hidden" @click="isSidebarOpen = false">
+      <div class="mobile-sidebar" @click.stop>
+        <IconSidebar :active-tab="activeTab" @update:activeTab="activeTab = $event"
+          @open-settings="isSettingsOpen = true" @open-profile="isProfileOpen = true" />
         <Sidebar />
       </div>
     </div>
 
     <!-- Main Chat Area -->
     <main class="chat-container">
-      <ChatArea 
-        :is-sidebar-collapsed="!isSidebarOpen" 
-        @toggle-sidebar="toggleSidebar" 
-      />
+      <ChatArea :is-sidebar-collapsed="!isSidebarOpen" @toggle-sidebar="toggleSidebar" />
     </main>
 
     <!-- Settings Dialog -->
     <SettingsDialog v-model:open="isSettingsOpen" />
+
+    <!-- Profile Dialog -->
+    <ProfileDialog v-model:open="isProfileOpen" />
   </div>
 </template>
 
@@ -107,7 +93,7 @@ onMounted(() => {
     display: block;
     width: 260px;
   }
-  
+
   .sidebar-container.collapsed {
     width: 0;
     overflow: hidden;

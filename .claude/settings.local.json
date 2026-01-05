@@ -21,7 +21,16 @@
       "Bash(cat:*)",
       "Bash(gemini mcp remove --help:*)",
       "Bash(dir:*)",
-      "Bash(gemini extension uninstall:*)"
+      "Bash(gemini extension uninstall:*)",
+      "Bash(pnpm:*)",
+      "Bash(npm --version:*)",
+      "Bash(nvm version:*)",
+      "Bash(nvm list:*)",
+      "Bash(node:*)",
+      "Bash(nvm use:*)",
+      "Bash(nvm:*)",
+      "Bash(\"D:\\\\nvm\\\\v22.16.0\\\\node.exe\":*)",
+      "Bash(\"D:\\\\nvm\\\\v22.16.0\\\\pnpm.cmd\" --version)"
     ]
   }
 }
