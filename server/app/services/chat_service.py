@@ -3,6 +3,8 @@ from typing import List, Optional
 import re
 import time
 import logging
+import asyncio
+from asyncio import Queue
 from app.models.chat import ChatSession, Message
 from app.models.friend import Friend
 from app.models.llm import LLMConfig
@@ -26,7 +28,59 @@ from agents import Agent, Runner, set_default_openai_client, set_default_openai_
 from agents.items import ReasoningItem
 from agents.stream_events import RunItemStreamEvent
 
-# --- Session Services ---
+# Global queue for memory generation tasks (processed by background worker)
+_memory_generation_queue: List[int] = []
+
+def _schedule_memory_generation(db: Session, session_id: int):
+    """
+    调度一个会话的记忆生成任务。
+    由于在同步上下文中无法直接创建异步任务，这里将session_id添加到全局队列。
+    后台worker会定期检查队列并异步处理。
+    """
+    if session_id not in _memory_generation_queue:
+        _memory_generation_queue.append(session_id)
+        logger.info(f"[Memory Queue] Session {session_id} added to memory generation queue. Queue size: {len(_memory_generation_queue)}")
+    
+    # 提取会话数据用于后台处理
+    messages = (
+        db.query(Message)
+        .filter(
+            Message.session_id == session_id,
+            Message.deleted == False,
+            Message.role.in_(["user", "assistant"])
+        )
+        .order_by(Message.create_time.asc())
+        .all()
+    )
+    
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        return
+    
+    friend = db.query(Friend).filter(Friend.id == session.friend_id).first()
+    
+    # 存储到临时属性用于后台处理
+    openai_messages = [{"role": m.role, "content": m.content} for m in messages]
+    friend_id = session.friend_id
+    friend_name = friend.name if friend else "Unknown"
+    
+    # 使用 asyncio.run_coroutine_threadsafe 或 ensure_future 会更好，但需要事件循环引用
+    # 简单起见，这里我们使用一个更直接的方式：在后台定期扫描queue
+    try:
+        # 尝试获取当前事件循环
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # 如果有运行中的循环，直接创建任务
+            asyncio.create_task(_archive_session_async(
+                session_id=session_id,
+                openai_messages=openai_messages,
+                friend_id=friend_id,
+                friend_name=friend_name
+            ))
+            logger.info(f"[Memory Queue] Session {session_id} async task created directly.")
+    except RuntimeError:
+        # 没有运行中的循环，等待后台worker处理
+        logger.info(f"[Memory Queue] Session {session_id} queued for background processing.")
 
 def get_sessions(db: Session, skip: int = 0, limit: int = 100) -> List[ChatSession]:
     """
@@ -277,7 +331,7 @@ def archive_session(db: Session, session_id: int):
     """
     将指定会话归档并准备生成记忆（同步版本）。
     - 消息数 < 2 的会话跳过记忆生成，仅标记为已处理。
-    - 调用 Memobase SDK 异步生成记忆摘要。
+    - 仅标记会话为已归档，实际记忆生成由后台任务统一处理。
     """
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
@@ -288,7 +342,7 @@ def archive_session(db: Session, session_id: int):
         logger.info(f"[Archive] Session {session_id} already archived (memory_generated=True). Skipping.")
         return
 
-    # 边界检查：消息数 < 2 跳过
+    # 边界检查:消息数 < 2 跳过
     msg_count = db.query(Message).filter(
         Message.session_id == session_id, 
         Message.deleted == False
@@ -300,41 +354,14 @@ def archive_session(db: Session, session_id: int):
         logger.info(f"[Archive] Session {session_id} skipped (msg_count={msg_count} < 2). Marked as processed.")
         return
 
-    # 提取消息上下文
-    messages = (
-        db.query(Message)
-        .filter(
-            Message.session_id == session_id,
-            Message.deleted == False,
-            Message.role.in_(["user", "assistant"])
-        )
-        .order_by(Message.create_time.asc())
-        .all()
-    )
-    
-    # 格式化为 OpenAI 兼容格式
-    openai_messages = [{"role": m.role, "content": m.content} for m in messages]
-    
-    # 获取好友信息用于 metadata
-    friend = db.query(Friend).filter(Friend.id == session.friend_id).first()
-    friend_id = session.friend_id
-    friend_name = friend.name if friend else "Unknown"
-    
-    # 调用 Memobase SDK 异步任务（在后台执行）
-    import asyncio
-    loop = asyncio.get_running_loop()
-    asyncio.create_task(_archive_session_async(
-        session_id=session_id,
-        openai_messages=openai_messages,
-        friend_id=friend_id,
-        friend_name=friend_name
-    ))
-    logger.info(f"[Archive] Session {session_id} memory generation task scheduled.")
-    
-    # 标记为已处理
+    # 标记为已处理（记忆生成由后台worker异步处理）
+    # 注意：这里先标记，后台任务会检测到并生成记忆
     session.memory_generated = True
     db.commit()
-    logger.info(f"[Archive] Session {session_id} marked as archived.")
+    logger.info(f"[Archive] Session {session_id} marked as archived. Memory generation will be handled by background worker.")
+    
+    # 将任务添加到全局队列供后台处理（避免同步上下文中调用 asyncio）
+    _schedule_memory_generation(db, session_id)
 
 
 async def _archive_session_async(

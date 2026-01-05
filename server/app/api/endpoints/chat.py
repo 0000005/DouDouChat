@@ -1,4 +1,6 @@
 import json
+import logging
+import traceback
 from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -7,6 +9,8 @@ from typing import List
 from app.api import deps
 from app.schemas import chat as chat_schemas
 from app.services import chat_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -31,8 +35,14 @@ def create_session(
     """
     Create a new chat session.
     """
-    session = chat_service.create_session(db, session_in=session_in)
-    return session
+    try:
+        session = chat_service.create_session(db, session_in=session_in)
+        return session
+    except Exception as e:
+        # 确保异常被记录到控制台
+        logger.error(f"Error creating session: {str(e)}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        raise  # 重新抛出异常让 FastAPI 处理
 
 @router.patch("/sessions/{session_id}", response_model=chat_schemas.ChatSessionRead)
 def update_session(
