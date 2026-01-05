@@ -63,6 +63,22 @@ def delete_session(
         raise HTTPException(status_code=404, detail="Session not found")
     return {"ok": True}
 
+@router.post("/sessions/{session_id}/archive")
+async def archive_session(
+    *,
+    db: Session = Depends(deps.get_db),
+    session_id: int,
+):
+    """
+    Manually archive a chat session and trigger memory generation (for debugging).
+    """
+    session = chat_service.get_session(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    chat_service.archive_session(db, session_id=session_id)
+    return {"ok": True, "message": "Archive task scheduled"}
+
 @router.get("/sessions/{session_id}/messages", response_model=List[chat_schemas.MessageRead])
 def read_messages(
     *,
