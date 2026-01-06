@@ -1,5 +1,6 @@
 import logging
 import logging.config
+import os
 import sys
 from typing import List
 
@@ -7,6 +8,12 @@ def get_logging_config():
     """
     定义统一的日志配置字典
     """
+    log_dir = os.path.join(os.getcwd(), "logs")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+        
+    log_file = os.path.join(log_dir, "app.log")
+
     return {
         "version": 1,
         "disable_existing_loggers": False,  # 关键：不禁用已存在的 Logger
@@ -21,21 +28,30 @@ def get_logging_config():
                 "formatter": "standard",
                 "stream": "ext://sys.stderr",
             },
+            "file": {
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "formatter": "standard",
+                "filename": log_file,
+                "when": "midnight",
+                "interval": 1,
+                "backupCount": 30,
+                "encoding": "utf-8",
+            },
         },
         "loggers": {
             "app": {
-                "handlers": ["console"],
+                "handlers": ["console", "file"],
                 "level": "INFO",
                 "propagate": False,
             },
             "memobase_server": {
-                "handlers": ["console"],
+                "handlers": ["console", "file"],
                 "level": "INFO",
                 "propagate": False,
             },
         },
         "root": {
-            "handlers": ["console"],
+            "handlers": ["console", "file"],
             "level": "INFO",
         },
     }
