@@ -4,6 +4,8 @@ from typing import Optional
 
 
 def attribute_unify(attr: str):
+    if attr is None:
+        return ""
     return attr.lower().strip().replace(" ", "_")
 
 

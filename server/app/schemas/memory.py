@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 class ProfileAttributes(BaseModel):
     topic: str
-    sub_topic: str
+    sub_topic: Optional[str] = None
 
 class ProfileCreate(BaseModel):
     content: str
