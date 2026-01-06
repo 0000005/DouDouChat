@@ -168,7 +168,7 @@ FastAPI backend with a modular service-oriented architecture.
 *   **Backend Environment:**
     *   **Virtual Environment:** A virtual environment is located at `server/venv/`.
     *   **Run Server:** Execute `server\venv\Scripts\python -m uvicorn app.main:app --reload` within the `server` directory to start the backend with auto-reload.
-    *   **Database Operations:** Use the available `db-util` tools (`list_tables`, `execute_sql`) to inspect and modify the SQLite database.
+    *   **Database Operations:** 使用 `sqlite3` 命令（已配置全局环境变量）直接操作数据库文件（如 `sqlite3 server/data/doudou.db`）。
     *   **Database Migrations (Alembic):**
         *   **Automatic Update:** The server automatically applies the latest migrations on startup (`init_db.py` calls `alembic upgrade head`).
         *   **Generate Migration:** Run `gen_migration.bat` in the project root to generate a new migration script after modifying SQLAlchemy models.
