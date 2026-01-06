@@ -24,7 +24,7 @@ from app.vendor.memobase_server.controllers.event import (
 from app.vendor.memobase_server.controllers.context import get_user_context
 from app.vendor.memobase_server.controllers.blob import insert_blob
 from app.vendor.memobase_server.controllers.event_gist import search_user_event_gists, get_user_event_gists
-from app.vendor.memobase_server.controllers.buffer import flush_buffer
+from app.vendor.memobase_server.controllers.buffer import flush_buffer, insert_blob_to_buffer
 from app.vendor.memobase_server.controllers.project import (
     get_project_profile_config_string, 
     update_project_profile_config
@@ -394,7 +394,18 @@ class MemoService:
             project_id=space_id, 
             blob=blob_data
         )
-        return cls._unwrap(promise)
+        result = cls._unwrap(promise)
+        
+        # Also insert into buffer so that flush_buffer can find it
+        buffer_promise = await insert_blob_to_buffer(
+            user_id=user_id,
+            project_id=space_id,
+            blob_id=result.id,
+            blob_data=blob_data.to_blob()
+        )
+        cls._unwrap(buffer_promise)
+        
+        return result
 
     @classmethod
     async def trigger_buffer_flush(
