@@ -14,6 +14,8 @@ import { useEmbeddingStore } from '@/stores/embedding'
 import { useSettingsStore } from '@/stores/settings'
 import { useMemoryStore } from '@/stores/memory'
 import { storeToRefs } from 'pinia'
+import { Switch } from '@/components/ui/switch'
+import { Slider } from '@/components/ui/slider'
 import {
     Select,
     SelectContent,
@@ -50,7 +52,18 @@ const {
 } = storeToRefs(embeddingStore)
 
 const settingsStore = useSettingsStore()
-const { passiveTimeout, isSaving: isSettingsSaving } = storeToRefs(settingsStore)
+const { 
+    passiveTimeout, 
+    enableThinking,
+    showThinking,
+    showToolCalls,
+    recallEnabled,
+    searchRounds,
+    profileTopk,
+    eventTopk,
+    similarityThreshold,
+    isSaving: isSettingsSaving 
+} = storeToRefs(settingsStore)
 
 const memoryStore = useMemoryStore()
 
@@ -75,6 +88,8 @@ onMounted(() => {
     llmStore.fetchConfig()
     embeddingStore.fetchConfig()
     settingsStore.fetchSessionSettings()
+    settingsStore.fetchChatSettings()
+    settingsStore.fetchMemorySettings()
     memoryStore.fetchConfig()
 })
 
@@ -84,6 +99,8 @@ const handleSave = async () => {
             llmStore.saveConfig(),
             embeddingStore.saveConfig(),
             settingsStore.saveSessionSettings(),
+            settingsStore.saveChatSettings(),
+            settingsStore.saveMemorySettings(),
             memoryStore.saveConfig()
         ])
         emit('update:open', false)
@@ -154,6 +171,11 @@ const originalSetTab = (tab: string) => {
                     :class="activeTab === 'memory' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'"
                     @click="originalSetTab('memory')">
                     记忆设置
+                </button>
+                <button class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                    :class="activeTab === 'chat' ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'"
+                    @click="originalSetTab('chat')">
+                    聊天设置
                 </button>
             </div>
 
@@ -300,6 +322,51 @@ const originalSetTab = (tab: string) => {
                                 </div>
                             </div>
 
+                            <!-- Recall Settings -->
+                            <div class="space-y-4 border-t pt-6">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium">启用记忆召回</label>
+                                    <Switch :checked="recallEnabled" @update:checked="val => recallEnabled = val" />
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    根据上下文语义自动召回相关的用户画像和事件历史，增强对话的个性化体验。
+                                </p>
+                                
+                                <div v-if="recallEnabled" class="space-y-6 pt-2">
+                                    <div class="grid gap-2">
+                                        <div class="flex justify-between items-center">
+                                            <label class="text-sm font-medium">相似度阈值 ({{ similarityThreshold }})</label>
+                                        </div>
+                                        <Slider 
+                                            :model-value="[similarityThreshold]" 
+                                            @update:model-value="val => similarityThreshold = val[0]"
+                                            :max="1" 
+                                            :step="0.05"
+                                            class="py-4"
+                                        />
+                                        <p class="text-xs text-gray-500">语义检索的最低匹配得分，值越高越精准但召回内容越少。</p>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="grid gap-2">
+                                            <label class="text-sm font-medium">搜索轮数</label>
+                                            <Input v-model.number="searchRounds" type="number" min="1" max="10" />
+                                        </div>
+                                        <div class="grid gap-2">
+                                            <label class="text-sm font-medium">画像召回 TopK</label>
+                                            <Input v-model.number="profileTopk" type="number" min="1" max="20" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="grid gap-2">
+                                            <label class="text-sm font-medium">事件召回 TopK</label>
+                                            <Input v-model.number="eventTopk" type="number" min="1" max="20" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Schema Builder -->
                             <div class="space-y-4 border-t pt-6">
                                 <div class="flex items-center justify-between">
@@ -345,6 +412,41 @@ const originalSetTab = (tab: string) => {
                                 <div v-if="memoryStore.profileConfig.topics.length === 0"
                                     class="py-10 text-center border border-dashed rounded-md bg-gray-50/50">
                                     <p class="text-sm text-gray-400">暂无维度定义，请点击上方按钮添加。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template v-if="activeTab === 'chat'">
+                        <div class="space-y-6">
+                            <div>
+                                <h3 class="text-lg font-medium">聊天展示设置</h3>
+                                <p class="text-sm text-gray-500">配置聊天界面的展示细节。</p>
+                            </div>
+
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="space-y-0.5">
+                                        <label class="text-sm font-medium">显示思维链</label>
+                                        <p class="text-xs text-gray-500">在消息下方展示 AI 的推理思考过程。</p>
+                                    </div>
+                                    <Switch :checked="showThinking" @update:checked="val => showThinking = val" />
+                                </div>
+
+                                <div class="flex items-center justify-between border-t pt-4">
+                                    <div class="space-y-0.5">
+                                        <label class="text-sm font-medium">显示工具调用</label>
+                                        <p class="text-xs text-gray-500">在消息中展示 AI 调用外部工具的详细信息。</p>
+                                    </div>
+                                    <Switch :checked="showToolCalls" @update:checked="val => showToolCalls = val" />
+                                </div>
+                                
+                                <div class="flex items-center justify-between border-t pt-4">
+                                    <div class="space-y-0.5">
+                                        <label class="text-sm font-medium">启用深度思考模式 (推理)</label>
+                                        <p class="text-xs text-gray-500">如果模型支持，开启后将强制模型进行链式思考后再回答。</p>
+                                    </div>
+                                    <Switch :checked="enableThinking" @update:checked="val => enableThinking = val" />
                                 </div>
                             </div>
                         </div>

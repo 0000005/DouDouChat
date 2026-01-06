@@ -14,6 +14,17 @@ export const useSettingsStore = defineStore('settings', () => {
     // ===== Chat 配置 =====
     // 是否启用深度思考模式，默认 false
     const enableThinking = ref<boolean>(false)
+    // 聊天界面是否展示思维链
+    const showThinking = ref<boolean>(false)
+    // 聊天界面是否展示工具调用过程
+    const showToolCalls = ref<boolean>(false)
+
+    // ===== Memory 配置 =====
+    const recallEnabled = ref<boolean>(true)
+    const searchRounds = ref<number>(3)
+    const profileTopk = ref<number>(5)
+    const eventTopk = ref<number>(5)
+    const similarityThreshold = ref<number>(0.5)
 
     // ===== Loading 状态 =====
     const isLoading = ref(false)
@@ -69,13 +80,45 @@ export const useSettingsStore = defineStore('settings', () => {
      * 从后端获取 chat 分组的配置
      */
     const fetchChatSettings = () =>
-        fetchSettings('chat', { enable_thinking: enableThinking })
+        fetchSettings('chat', {
+            enable_thinking: enableThinking,
+            show_thinking: showThinking,
+            show_tool_calls: showToolCalls
+        })
 
     /**
      * 保存 chat 配置到后端
      */
     const saveChatSettings = () =>
-        saveSettings('chat', { enable_thinking: enableThinking })
+        saveSettings('chat', {
+            enable_thinking: enableThinking,
+            show_thinking: showThinking,
+            show_tool_calls: showToolCalls
+        })
+
+    /**
+     * 从后端获取 memory 分组的配置
+     */
+    const fetchMemorySettings = () =>
+        fetchSettings('memory', {
+            recall_enabled: recallEnabled,
+            search_rounds: searchRounds,
+            profile_topk: profileTopk,
+            event_topk: eventTopk,
+            similarity_threshold: similarityThreshold
+        })
+
+    /**
+     * 保存 memory 配置到后端
+     */
+    const saveMemorySettings = () =>
+        saveSettings('memory', {
+            recall_enabled: recallEnabled,
+            search_rounds: searchRounds,
+            profile_topk: profileTopk,
+            event_topk: eventTopk,
+            similarity_threshold: similarityThreshold
+        })
 
     /**
      * 将秒数转换为分钟显示
@@ -95,6 +138,13 @@ export const useSettingsStore = defineStore('settings', () => {
         // State
         passiveTimeout,
         enableThinking,
+        showThinking,
+        showToolCalls,
+        recallEnabled,
+        searchRounds,
+        profileTopk,
+        eventTopk,
+        similarityThreshold,
         isLoading,
         isSaving,
         // Actions
@@ -104,5 +154,7 @@ export const useSettingsStore = defineStore('settings', () => {
         setTimeoutFromMinutes,
         fetchChatSettings,
         saveChatSettings,
+        fetchMemorySettings,
+        saveMemorySettings,
     }
 })
