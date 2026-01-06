@@ -1,28 +1,25 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
-
-const STORAGE_KEY = 'doudou-thinking-mode'
+import { ref, computed } from 'vue'
+import { useSettingsStore } from '@/stores/settings'
 
 export const useThinkingModeStore = defineStore('thinkingMode', () => {
-    // Initialize from localStorage
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const isEnabled = ref<boolean>(stored !== null ? JSON.parse(stored) : false)
+    const settingsStore = useSettingsStore()
 
-    // Persist to localStorage when changed
-    watch(isEnabled, (newValue) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newValue))
-    })
+    const isEnabled = computed(() => settingsStore.enableThinking)
 
-    const toggle = () => {
-        isEnabled.value = !isEnabled.value
+    const toggle = async () => {
+        settingsStore.enableThinking = !settingsStore.enableThinking
+        await settingsStore.saveChatSettings()
     }
 
-    const enable = () => {
-        isEnabled.value = true
+    const enable = async () => {
+        settingsStore.enableThinking = true
+        await settingsStore.saveChatSettings()
     }
 
-    const disable = () => {
-        isEnabled.value = false
+    const disable = async () => {
+        settingsStore.enableThinking = false
+        await settingsStore.saveChatSettings()
     }
 
     return {

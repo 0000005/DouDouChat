@@ -11,41 +11,71 @@ export const useSettingsStore = defineStore('settings', () => {
     // 会话过期时间（秒），默认 1800（30分钟）
     const passiveTimeout = ref<number>(1800)
 
+    // ===== Chat 配置 =====
+    // 是否启用深度思考模式，默认 false
+    const enableThinking = ref<boolean>(false)
+
     // ===== Loading 状态 =====
     const isLoading = ref(false)
     const isSaving = ref(false)
 
     /**
-     * 从后端获取 session 分组的配置
+     * 通用方法：从后端获取指定分组的配置
      */
-    const fetchSessionSettings = async () => {
+    const fetchSettings = async (groupName: string, fieldMapping: Record<string, any>) => {
         isLoading.value = true
         try {
-            const settings = await SettingsAPI.getSettingsByGroup('session')
-            if (settings.passive_timeout !== undefined) {
-                passiveTimeout.value = settings.passive_timeout
-            }
+            const settings = await SettingsAPI.getSettingsByGroup(groupName)
+            Object.entries(fieldMapping).forEach(([settingKey, ref]) => {
+                if (settings[settingKey] !== undefined) {
+                    ref.value = settings[settingKey]
+                }
+            })
         } catch (error) {
-            console.error('Failed to fetch session settings:', error)
-            // 使用默认值，不抛出异常
+            console.error(`Failed to fetch ${groupName} settings:`, error)
         } finally {
             isLoading.value = false
         }
     }
 
     /**
-     * 保存 session 配置到后端
+     * 通用方法：保存指定分组的配置到后端
      */
-    const saveSessionSettings = async () => {
+    const saveSettings = async (groupName: string, fieldMapping: Record<string, any>) => {
         isSaving.value = true
         try {
-            await SettingsAPI.updateSettingsBulk('session', {
-                passive_timeout: passiveTimeout.value,
-            })
+            const payload = Object.fromEntries(
+                Object.entries(fieldMapping).map(([key, ref]) => [key, ref.value])
+            )
+            await SettingsAPI.updateSettingsBulk(groupName, payload)
         } finally {
             isSaving.value = false
         }
     }
+
+    /**
+     * 从后端获取 session 分组的配置
+     */
+    const fetchSessionSettings = () =>
+        fetchSettings('session', { passive_timeout: passiveTimeout })
+
+    /**
+     * 保存 session 配置到后端
+     */
+    const saveSessionSettings = () =>
+        saveSettings('session', { passive_timeout: passiveTimeout })
+
+    /**
+     * 从后端获取 chat 分组的配置
+     */
+    const fetchChatSettings = () =>
+        fetchSettings('chat', { enable_thinking: enableThinking })
+
+    /**
+     * 保存 chat 配置到后端
+     */
+    const saveChatSettings = () =>
+        saveSettings('chat', { enable_thinking: enableThinking })
 
     /**
      * 将秒数转换为分钟显示
@@ -64,6 +94,7 @@ export const useSettingsStore = defineStore('settings', () => {
     return {
         // State
         passiveTimeout,
+        enableThinking,
         isLoading,
         isSaving,
         // Actions
@@ -71,5 +102,7 @@ export const useSettingsStore = defineStore('settings', () => {
         saveSessionSettings,
         getTimeoutInMinutes,
         setTimeoutFromMinutes,
+        fetchChatSettings,
+        saveChatSettings,
     }
 })

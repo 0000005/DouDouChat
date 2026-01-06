@@ -5,21 +5,26 @@ import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import ProfileDialog from './components/ProfileDialog.vue'
+import { useSettingsStore } from '@/stores/settings'
 
 const isSidebarOpen = ref(true)
 const activeTab = ref('chat')
 const isSettingsOpen = ref(false)
 const isProfileOpen = ref(false)
+const settingsStore = useSettingsStore()
 
 const toggleSidebar = () => {
   isSidebarOpen.value = !isSidebarOpen.value
 }
 
-onMounted(() => {
+onMounted(async () => {
   // If screen width is less than 768px (md breakpoint), start with sidebar closed
   if (window.innerWidth < 768) {
     isSidebarOpen.value = false
   }
+
+  // Load chat settings from backend (including enable_thinking)
+  await settingsStore.fetchChatSettings()
 })
 </script>
 

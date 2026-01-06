@@ -92,20 +92,18 @@ class SettingsService:
 
     @classmethod
     def initialize_defaults(cls):
-        """Initialize default settings if they don't exist."""
         db = SessionLocal()
         try:
             defaults = [
                 ("session", "passive_timeout", 1800, "int", "会话判定过期的非活跃时长 (秒)"),
+                ("chat", "enable_thinking", False, "bool", "是否启用深度思考模式"),
             ]
             for group, key, val, vtype, desc in defaults:
                 try:
-                    # 直接尝试插入，利用唯一约束判断是否已存在
                     existing = db.query(SystemSetting).filter_by(group_name=group, key=key).first()
                     if not existing:
                         cls.set_setting(db, group, key, val, vtype, desc)
                 except IntegrityError:
-                    # 并发场景下可能有竞态，忽略
                     db.rollback()
         finally:
             db.close()
