@@ -593,16 +593,16 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     sse_start_time = time.perf_counter()
     sse_frame_count = 0
     sse_first_frame_logged = False
-    sse_logger.debug(f"[SESSION {session_id}] Starting LLM stream...")
+    # sse_logger.debug(f"[SESSION {session_id}] Starting LLM stream...")
     
     try:
         result = Runner.run_streamed(agent, agent_messages)
-        sse_logger.debug(f"[SESSION {session_id}] Runner.run_streamed returned at {time.perf_counter() - sse_start_time:.3f}s")
+        # sse_logger.debug(f"[SESSION {session_id}] Runner.run_streamed returned at {time.perf_counter() - sse_start_time:.3f}s")
         
         async for event in result.stream_events():
             elapsed = time.perf_counter() - sse_start_time
             if not sse_first_frame_logged:
-                sse_logger.debug(f"[SESSION {session_id}] FIRST EVENT at {elapsed:.3f}s - type: {type(event).__name__}")
+                # sse_logger.debug(f"[SESSION {session_id}] FIRST EVENT at {elapsed:.3f}s - type: {type(event).__name__}")
                 sse_first_frame_logged = True
             
             # PRIORITY 1: Handle streaming reasoning delta events (REAL-TIME)
@@ -613,7 +613,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                     if reasoning_delta:
                         full_thinking_content += reasoning_delta
                         sse_frame_count += 1
-                        sse_logger.debug(f"[SESSION {session_id}] YIELD thinking_delta #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_delta[:30]}...")
+                        # sse_logger.debug(f"[SESSION {session_id}] YIELD thinking_delta #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_delta[:30]}...")
                         yield {
                             "event": "thinking",
                             "data": {"delta": reasoning_delta}
@@ -647,7 +647,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                     if reasoning_text:
                         full_thinking_content += reasoning_text
                         sse_frame_count += 1
-                        sse_logger.debug(f"[SESSION {session_id}] YIELD thinking #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_text[:30]}...")
+                        # sse_logger.debug(f"[SESSION {session_id}] YIELD thinking #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_text[:30]}...")
                         yield {
                             "event": "thinking",
                             "data": {"delta": reasoning_text}
@@ -671,7 +671,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                     msg_delta = buffer[:start_idx]
                                     saved_content += msg_delta
                                     sse_frame_count += 1
-                                    sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {msg_delta[:30]}...")
+                                    # sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {msg_delta[:30]}...")
                                     yield {
                                         "event": "message",
                                         "data": {"delta": msg_delta}
@@ -698,7 +698,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                     # Yield all
                                     saved_content += buffer
                                     sse_frame_count += 1
-                                    sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {buffer[:30]}...")
+                                    # sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {buffer[:30]}...")
                                     yield {"event": "message", "data": {"delta": buffer}}
                                     buffer = ""
                         else:
