@@ -190,9 +190,23 @@ export const useSessionStore = defineStore('session', () => {
         }
     }
 
-    // Clear messages for a friend (for testing or reset)
-    const clearFriendMessages = (friendId: number) => {
-        delete messagesMap.value[friendId]
+    // Clear all chat history for a friend via API
+    const clearFriendHistory = async (friendId: number) => {
+        isLoading.value = true
+        try {
+            await ChatAPI.clearFriendMessages(friendId)
+            // Clear local state
+            messagesMap.value[friendId] = []
+            if (currentFriendId.value === friendId) {
+                currentSessions.value = []
+                currentSessionId.value = null
+            }
+        } catch (error) {
+            console.error(`Failed to clear history for friend ${friendId}:`, error)
+            throw error
+        } finally {
+            isLoading.value = false
+        }
     }
 
     return {
@@ -210,7 +224,7 @@ export const useSessionStore = defineStore('session', () => {
         fetchFriendSessions,
         loadSpecificSession,
         resetToMergedView,
-        clearFriendMessages,
+        clearFriendHistory,
         startNewSession: async () => {
             if (!currentFriendId.value) return
 

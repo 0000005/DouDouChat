@@ -291,3 +291,11 @@ export async function* sendMessageToFriendStream(friendId: number, message: Mess
     }
   }
 }
+export async function clearFriendMessages(friendId: number): Promise<void> {
+  const response = await fetch(`/api/chat/friends/${friendId}/messages`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to clear friend messages')
+  }
+}

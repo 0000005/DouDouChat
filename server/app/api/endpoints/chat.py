@@ -160,6 +160,18 @@ def read_friend_sessions(
     sessions = chat_service.get_sessions_with_stats_by_friend(db, friend_id=friend_id)
     return sessions
 
+@router.delete("/friends/{friend_id}/messages")
+def clear_friend_messages(
+    *,
+    db: Session = Depends(deps.get_db),
+    friend_id: int,
+):
+    """
+    Clear all messages and sessions for a specific friend.
+    """
+    chat_service.clear_friend_chat_history(db, friend_id=friend_id)
+    return {"ok": True}
+
 @router.post("/friends/{friend_id}/messages")
 async def send_message_to_friend(
     *,

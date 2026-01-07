@@ -9,6 +9,15 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import {
     MessageSquare,
     Brain,
     Search,
@@ -16,7 +25,9 @@ import {
     Trash2,
     ChevronLeft,
     CheckCircle2,
-    RefreshCw
+    RefreshCw,
+    AlertTriangle,
+    Loader2
 } from 'lucide-vue-next'
 import { getFriendEventGists, type UserEventGist } from '@/api/memory'
 
@@ -46,6 +57,11 @@ const viewState = ref<'menu' | 'sessions' | 'memories'>('menu')
 const memories = ref<UserEventGist[]>([])
 const isLoadingMemories = ref(false)
 const fetchMemoriesError = ref<string | null>(null)
+
+// 清空确认状态
+const showClearConfirm = ref(false)
+const isClearing = ref(false)
+const clearError = ref<string | null>(null)
 
 const fetchMemories = async () => {
     if (!sessionStore.currentFriendId) return
@@ -124,8 +140,26 @@ const handleMenuClick = (menuId: string) => {
     } else if (menuId === 'memories') {
         viewState.value = 'memories'
         fetchMemories()
+    } else if (menuId === 'clear') {
+        showClearConfirm.value = true
     } else {
         console.log(`Menu clicked: ${menuId}`)
+    }
+}
+
+const handleClearHistory = async () => {
+    if (!sessionStore.currentFriendId) return
+
+    isClearing.value = true
+    clearError.value = null
+    try {
+        await sessionStore.clearFriendHistory(sessionStore.currentFriendId)
+        showClearConfirm.value = false
+        handleClose() // 清空后关闭
+    } catch (err: any) {
+        clearError.value = err.message || '清空失败'
+    } finally {
+        isClearing.value = false
     }
 }
 
@@ -277,6 +311,38 @@ const formatTime = (dateStr?: string) => {
             </div>
         </SheetContent>
     </Sheet>
+
+    <!-- Clear Confirmation Dialog -->
+    <Dialog v-model:open="showClearConfirm">
+        <DialogContent class="sm:max-w-[425px]">
+            <DialogHeader>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="p-2 bg-red-100 rounded-full">
+                        <AlertTriangle class="w-6 h-6 text-red-600" />
+                    </div>
+                    <DialogTitle>确认清空聊天记录？</DialogTitle>
+                </div>
+                <DialogDescription class="text-gray-600 space-y-2 py-2">
+                    <p>这将执行以下操作：</p>
+                    <ul class="list-disc list-inside text-sm pl-2">
+                        <li>删除与 <b>{{ currentFriendName }}</b> 的所有历史聊天记录</li>
+                        <li>自动将当前未归档的对话整理为记忆摘要</li>
+                        <li><b>注意：</b>此操作不可撤销，但已生成的“记忆列表”将保留。</li>
+                    </ul>
+                </DialogDescription>
+            </DialogHeader>
+            <div v-if="clearError" class="py-2 text-sm text-red-500 font-medium">
+                {{ clearError }}
+            </div>
+            <DialogFooter class="gap-2 sm:gap-0">
+                <Button variant="outline" @click="showClearConfirm = false" :disabled="isClearing">取消</Button>
+                <Button variant="destructive" @click="handleClearHistory" :disabled="isClearing">
+                    <Loader2 v-if="isClearing" class="w-4 h-4 mr-2 animate-spin" />
+                    {{ isClearing ? '正在清空...' : '确认清空' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>
 
 <style scoped>

@@ -147,6 +147,39 @@ def delete_session(db: Session, session_id: int) -> bool:
     db.commit()
     return True
 
+def clear_friend_chat_history(db: Session, friend_id: int):
+    """
+    清空与指定好友的所有聊天记录，并在清空前尝试归档现有记忆。
+    """
+    # 1. 找到该好友所有未归档且未删除的会话
+    sessions = db.query(ChatSession).filter(
+        ChatSession.friend_id == friend_id,
+        ChatSession.deleted == False
+    ).all()
+    
+    for session in sessions:
+        # 如果该会话尚未生成记忆，且包含至少2条消息，触发归档
+        if not session.memory_generated:
+            msg_count = db.query(Message).filter(
+                Message.session_id == session.id,
+                Message.deleted == False
+            ).count()
+            if msg_count >= 2:
+                logger.info(f"[Clear History] Archiving session {session.id} before deletion.")
+                archive_session(db, session.id)
+            else:
+                # 消息太少，直接标记为已生成记忆以便不再扫描
+                session.memory_generated = True
+        
+        # 2. 标记会话为已删除
+        session.deleted = True
+        
+        # 3. 标记该会话下的所有消息为已删除
+        db.query(Message).filter(Message.session_id == session.id).update({"deleted": True})
+    
+    db.commit()
+    logger.info(f"[Clear History] All chat history for friend {friend_id} has been cleared/archived.")
+
 # --- Message Services ---
 
 def get_messages(db: Session, session_id: int, skip: int = 0, limit: int = 100) -> List[Message]:

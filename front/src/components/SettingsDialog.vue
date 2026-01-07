@@ -52,8 +52,8 @@ const {
 } = storeToRefs(embeddingStore)
 
 const settingsStore = useSettingsStore()
-const { 
-    passiveTimeout, 
+const {
+    passiveTimeout,
     enableThinking,
     showThinking,
     showToolCalls,
@@ -61,7 +61,7 @@ const {
     searchRounds,
     eventTopk,
     similarityThreshold,
-    isSaving: isSettingsSaving 
+    isSaving: isSettingsSaving
 } = storeToRefs(settingsStore)
 
 const memoryStore = useMemoryStore()
@@ -332,19 +332,15 @@ const originalSetTab = (tab: string) => {
                                 <p class="text-xs text-gray-500">
                                     根据上下文语义自动召回相关的事件历史，增强对话的个性化体验。
                                 </p>
-                                
+
                                 <div v-if="recallEnabled" class="space-y-6 pt-2">
                                     <div class="grid gap-2">
                                         <div class="flex justify-between items-center">
                                             <label class="text-sm font-medium">相似度阈值 ({{ similarityThreshold }})</label>
                                         </div>
-                                        <Slider 
-                                            :model-value="[similarityThreshold]" 
+                                        <Slider :model-value="[similarityThreshold]"
                                             @update:model-value="(val: number[] | undefined) => { if (val) similarityThreshold = val[0] }"
-                                            :max="1" 
-                                            :step="0.05"
-                                            class="py-4"
-                                        />
+                                            :max="1" :step="0.05" class="py-4" />
                                         <p class="text-xs text-gray-500">语义检索的最低匹配得分，值越高越精准但召回内容越少。</p>
                                     </div>
 
@@ -354,7 +350,7 @@ const originalSetTab = (tab: string) => {
                                             <Input v-model.number="searchRounds" type="number" min="1" max="10" />
                                         </div>
                                     </div>
-                                    
+
                                     <div class="grid grid-cols-2 gap-4">
                                         <div class="grid gap-2">
                                             <label class="text-sm font-medium">事件召回 TopK</label>
@@ -437,7 +433,7 @@ const originalSetTab = (tab: string) => {
                                     </div>
                                     <Switch v-model="showToolCalls" />
                                 </div>
-                                
+
                                 <div class="flex items-center justify-between border-t pt-4">
                                     <div class="space-y-0.5">
                                         <label class="text-sm font-medium">启用深度思考模式 (推理)</label>
