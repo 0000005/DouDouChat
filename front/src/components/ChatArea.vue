@@ -234,8 +234,6 @@ const handleOpenDrawer = () => {
         <PromptInputTextarea v-model="input" placeholder="输入消息..." class="input-textarea" />
         <div class="input-footer">
           <div class="footer-left">
-
-
             <!-- Thinking Mode Toggle -->
             <button type="button" class="thinking-btn" :class="{ 'active': isThinkingMode }"
               @click="handleToggleThinking" title="深度思考">

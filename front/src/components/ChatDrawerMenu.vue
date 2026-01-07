@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/button'
 import {
     MessageSquare,
     Brain,
-    Search,
     Pin,
     Trash2,
     ChevronLeft,
@@ -109,12 +108,6 @@ const menuItems = computed<MenuItem[]>(() => [
         label: '记忆列表',
         icon: Brain,
         action: () => handleMenuClick('memories')
-    },
-    {
-        id: 'search',
-        label: '查找聊天记录',
-        icon: Search,
-        action: () => handleMenuClick('search')
     },
     {
         id: 'pin',

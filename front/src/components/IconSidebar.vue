@@ -3,9 +3,6 @@ import { ref } from 'vue'
 import {
   MessageCircle,
   Users,
-  Star,
-  FolderOpen,
-  Link2,
   Settings,
   MoreHorizontal,
   User
@@ -17,7 +14,7 @@ import {
 } from '@/components/ui/popover'
 
 defineProps<{
-  activeTab: 'chat' | 'contacts' | 'favorites' | 'files' | 'mini-programs'
+  activeTab: 'chat' | 'contacts'
 }>()
 
 const emit = defineEmits<{
@@ -41,9 +38,6 @@ const handleOpenSettings = () => {
 const navItems = [
   { id: 'chat', icon: MessageCircle, label: '聊天' },
   { id: 'contacts', icon: Users, label: '联系人' },
-  { id: 'favorites', icon: Star, label: '收藏' },
-  { id: 'files', icon: FolderOpen, label: '文件' },
-  { id: 'mini-programs', icon: Link2, label: '小程序' },
 ]
 </script>
 
