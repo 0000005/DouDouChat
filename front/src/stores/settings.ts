@@ -22,7 +22,6 @@ export const useSettingsStore = defineStore('settings', () => {
     // ===== Memory 配置 =====
     const recallEnabled = ref<boolean>(true)
     const searchRounds = ref<number>(3)
-    const profileTopk = ref<number>(5)
     const eventTopk = ref<number>(5)
     const similarityThreshold = ref<number>(0.5)
 
@@ -108,7 +107,6 @@ export const useSettingsStore = defineStore('settings', () => {
         fetchSettings('memory', {
             recall_enabled: recallEnabled,
             search_rounds: searchRounds,
-            profile_topk: profileTopk,
             event_topk: eventTopk,
             similarity_threshold: similarityThreshold
         })
@@ -120,7 +118,6 @@ export const useSettingsStore = defineStore('settings', () => {
         saveSettings('memory', {
             recall_enabled: recallEnabled,
             search_rounds: searchRounds,
-            profile_topk: profileTopk,
             event_topk: eventTopk,
             similarity_threshold: similarityThreshold
         })
@@ -147,7 +144,6 @@ export const useSettingsStore = defineStore('settings', () => {
         showToolCalls,
         recallEnabled,
         searchRounds,
-        profileTopk,
         eventTopk,
         similarityThreshold,
         isLoading,

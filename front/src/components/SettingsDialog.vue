@@ -59,7 +59,6 @@ const {
     showToolCalls,
     recallEnabled,
     searchRounds,
-    profileTopk,
     eventTopk,
     similarityThreshold,
     isSaving: isSettingsSaving 
@@ -331,7 +330,7 @@ const originalSetTab = (tab: string) => {
                                     <Switch v-model="recallEnabled" />
                                 </div>
                                 <p class="text-xs text-gray-500">
-                                    根据上下文语义自动召回相关的用户画像和事件历史，增强对话的个性化体验。
+                                    根据上下文语义自动召回相关的事件历史，增强对话的个性化体验。
                                 </p>
                                 
                                 <div v-if="recallEnabled" class="space-y-6 pt-2">
@@ -353,10 +352,6 @@ const originalSetTab = (tab: string) => {
                                         <div class="grid gap-2">
                                             <label class="text-sm font-medium">搜索轮数</label>
                                             <Input v-model.number="searchRounds" type="number" min="1" max="10" />
-                                        </div>
-                                        <div class="grid gap-2">
-                                            <label class="text-sm font-medium">画像召回 TopK</label>
-                                            <Input v-model.number="profileTopk" type="number" min="1" max="20" />
                                         </div>
                                     </div>
                                     

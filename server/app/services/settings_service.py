@@ -101,10 +101,11 @@ class SettingsService:
                 ("chat", "show_tool_calls", False, "bool", "聊天界面是否展示工具调用过程"),
                 ("memory", "recall_enabled", True, "bool", "是否启用记忆召回功能"),
                 ("memory", "search_rounds", 3, "int", "记忆检索的最大轮数"),
-                ("memory", "profile_topk", 5, "int", "用户画像召回的数量"),
                 ("memory", "event_topk", 5, "int", "事件记忆召回的数量"),
                 ("memory", "similarity_threshold", 0.5, "float", "语义检索的相似度阈值"),
             ]
+            db.query(SystemSetting).filter_by(group_name="memory", key="profile_topk").delete()
+            db.commit()
             for group, key, val, vtype, desc in defaults:
                 try:
                     existing = db.query(SystemSetting).filter_by(group_name=group, key=key).first()
