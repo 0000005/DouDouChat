@@ -10,6 +10,10 @@ from app.models.friend import Friend
 from app.models.llm import LLMConfig
 from app.schemas import chat as chat_schemas
 from datetime import datetime, timedelta
+from app.services.recall_service import RecallService
+from app.services.settings_service import SettingsService
+from app.services.memo.bridge import MemoService
+from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
@@ -23,9 +27,14 @@ if not sse_logger.handlers:
     sse_logger.addHandler(handler)
 
 from openai import AsyncOpenAI
-from openai.types.responses import ResponseTextDeltaEvent, ResponseReasoningSummaryTextDeltaEvent
-from agents import Agent, Runner, set_default_openai_client, set_default_openai_api
-from agents.items import ReasoningItem
+from openai.types.shared import Reasoning
+from openai.types.responses import (
+    ResponseOutputText,
+    ResponseTextDeltaEvent,
+    ResponseReasoningSummaryTextDeltaEvent,
+)
+from agents import Agent, ModelSettings, Runner, set_default_openai_client, set_default_openai_api
+from agents.items import MessageOutputItem, ReasoningItem
 from agents.stream_events import RunItemStreamEvent
 
 # Global queue for memory generation tasks (processed by background worker)
@@ -600,6 +609,12 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     db.refresh(user_msg)
 
     # 3. Prepare LLM Context
+    # 3.1 Fetch Memory & Settings
+    enable_recall = SettingsService.get_setting(db, "memory", "recall_enabled", True)
+    show_thinking = SettingsService.get_setting(db, "chat", "show_thinking", False)
+    show_tools = SettingsService.get_setting(db, "chat", "show_tool_calls", False)
+    logger.info(f"[ChatService] Settings: enable_recall={enable_recall}, show_thinking={show_thinking}, show_tools={show_tools}")
+
     history = (
         db.query(Message)
         .filter(Message.session_id == session_id, Message.deleted == False, Message.id != user_msg.id)
@@ -609,9 +624,70 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     )
     history.reverse()
 
+    # 3.2 Perform Recall if enabled
+    profile_data = ""
+    injected_recall_messages = []
+    
+    if enable_recall:
+        # a. Fetch Profile (Global)
+        try:
+            profiles = await MemoService.get_user_profiles(
+                DEFAULT_USER_ID, DEFAULT_SPACE_ID
+            )
+            if profiles and profiles.profiles:
+                profile_lines = []
+                for item in profiles.profiles:
+                    if not item or not item.content:
+                        continue
+                    attributes = item.attributes or {}
+                    topic = (attributes.get("topic") or "").strip()
+                    sub_topic = (attributes.get("sub_topic") or "").strip()
+                    if topic or sub_topic:
+                        profile_lines.append(
+                            f"- {topic}\t{sub_topic}\t{item.content.strip()}"
+                        )
+                    else:
+                        profile_lines.append(f"- {item.content.strip()}")
+                profile_data = "\n".join(profile_lines)
+        except Exception as e:
+            logger.error(f"[Recall] Failed to fetch profile: {e}")
+
+        # b. Perform Event Recall (Local to friend)
+        try:
+            # Prepare messages for recall agent
+            messages_for_recall = [{"role": m.role, "content": m.content} for m in history]
+            messages_for_recall.append({"role": "user", "content": message_in.content})
+            
+            recall_result = await RecallService.perform_recall(
+                db, DEFAULT_USER_ID, DEFAULT_SPACE_ID, messages_for_recall, db_session.friend_id
+            )
+            injected_recall_messages = recall_result.get("injected_messages", [])
+            footprints = recall_result.get("footprints", [])
+            
+            # Yield footprints early if configured
+            for fp in footprints:
+                if fp["type"] == "thinking" and show_thinking and message_in.enable_thinking:
+                    yield {"event": "thinking", "data": {"delta": f"> {fp['content']}\n"}}
+                elif fp["type"] == "tool_call" and show_tools:
+                    yield {"event": "tool_call", "data": {"tool_name": fp["name"], "arguments": fp["arguments"]}}
+                elif fp["type"] == "tool_result" and show_tools:
+                    yield {"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}}
+        except Exception as e:
+            logger.error(f"[Recall] Event recall failed: {e}")
+
+    # 3.3 Construct final instructions and messages
+    final_instructions = system_prompt
+    if profile_data:
+        final_instructions = f"{system_prompt}\n\n[USER PROFILE]\n{profile_data}"
+
     agent_messages = []
     for m in history:
         agent_messages.append({"role": m.role, "content": m.content})
+    
+    # Inject recall messages before the current user message
+    if injected_recall_messages:
+        agent_messages.extend(injected_recall_messages)
+        
     agent_messages.append({"role": "user", "content": message_in.content})
 
     # Yield Start Event
@@ -647,10 +723,15 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     set_default_openai_client(client, use_for_tracing=False)
     set_default_openai_api("chat_completions")
 
+    model_settings = ModelSettings()
+    if not message_in.enable_thinking:
+        model_settings = ModelSettings(reasoning=Reasoning(effort="none"))
+
     agent = Agent(
         name=friend_name,
-        instructions=system_prompt,
-        model=llm_config.model_name
+        instructions=final_instructions,
+        model=llm_config.model_name,
+        model_settings=model_settings,
     )
 
     full_ai_content = ""
@@ -665,6 +746,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
     THINK_START = "<think>"
     THINK_END = "</think>"
     enable_thinking = message_in.enable_thinking
+    message_emitted = False
 
     # SSE timing debug
     sse_start_time = time.perf_counter()
@@ -685,7 +767,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
             # PRIORITY 1: Handle streaming reasoning delta events (REAL-TIME)
             # This catches reasoning tokens as they stream, BEFORE reasoning_item_created
             if event.type == "raw_response_event" and isinstance(event.data, ResponseReasoningSummaryTextDeltaEvent):
-                if enable_thinking:
+                if enable_thinking and show_thinking:
                     reasoning_delta = event.data.delta
                     if reasoning_delta:
                         full_thinking_content += reasoning_delta
@@ -700,7 +782,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
             # PRIORITY 2: Handle reasoning item events (SUMMARY - arrives after all deltas)
             # Keep this for models that don't support streaming reasoning
             if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
-                if enable_thinking and isinstance(event.item, ReasoningItem):
+                if enable_thinking and show_thinking and isinstance(event.item, ReasoningItem):
                     # Extract reasoning content from the raw item
                     raw_item = event.item.raw_item
                     reasoning_text = ""
@@ -730,6 +812,19 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                             "data": {"delta": reasoning_text}
                         }
                 continue
+
+            # PRIORITY 3: Handle full message output if no text deltas streamed
+            if isinstance(event, RunItemStreamEvent) and event.name == "message_output_created":
+                if isinstance(event.item, MessageOutputItem) and not message_emitted:
+                    message_text = ""
+                    for part in event.item.raw_item.content:
+                        if isinstance(part, ResponseOutputText):
+                            message_text += part.text or ""
+                    if message_text:
+                        saved_content += message_text
+                        yield {"event": "message", "data": {"delta": message_text}}
+                        message_emitted = True
+                continue
             
             # Handle text delta events (with <think> tag parsing for models like DeepSeek-R1)
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
@@ -753,7 +848,8 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                         "event": "message",
                                         "data": {"delta": msg_delta}
                                     }
-                                buffer = buffer[start_idx + len(THINK_START):]
+                                    message_emitted = True
+                                buffer = buffer[start_idx + len(THINK_START):]  
                                 is_thinking = True
                                 # If thinking mode disabled, skip thinking content silently
                             else:
@@ -770,6 +866,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                     if to_yield:
                                         saved_content += to_yield
                                         yield {"event": "message", "data": {"delta": to_yield}}
+                                        message_emitted = True
                                     break  # Wait for more data
                                 else:
                                     # Yield all
@@ -777,13 +874,14 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                     sse_frame_count += 1
                                     # sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {buffer[:30]}...")
                                     yield {"event": "message", "data": {"delta": buffer}}
+                                    message_emitted = True
                                     buffer = ""
                         else:
                             # Look for </think>
                             end_idx = buffer.find(THINK_END)
                             if end_idx != -1:
                                 # Yield content before tag as thinking (only if enabled)
-                                if end_idx > 0 and enable_thinking:
+                                if end_idx > 0 and enable_thinking and show_thinking:
                                     yield {
                                         "event": "thinking",
                                         "data": {"delta": buffer[:end_idx]}
@@ -800,21 +898,22 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
                                 if partial_len > 0:
                                     to_yield = buffer[:-partial_len]
                                     buffer = buffer[-partial_len:]
-                                    if to_yield and enable_thinking:
+                                    if to_yield and enable_thinking and show_thinking:
                                         yield {"event": "thinking", "data": {"delta": to_yield}}
                                     break
                                 else:
-                                    if enable_thinking:
+                                    if enable_thinking and show_thinking:
                                         yield {"event": "thinking", "data": {"delta": buffer}}
                                     buffer = ""
-        
+                        
         # Flush remaining buffer
         if buffer:
-            if is_thinking and enable_thinking:
+            if is_thinking and enable_thinking and show_thinking:
                 yield {"event": "thinking", "data": {"delta": buffer}}
             elif not is_thinking:
                 saved_content += buffer
                 yield {"event": "message", "data": {"delta": buffer}}
+                message_emitted = True
 
     except Exception as e:
         # LLM call failed - yield error event

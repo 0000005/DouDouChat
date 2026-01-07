@@ -2,11 +2,19 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as ChatAPI from '@/api/chat'
 
+export interface ToolCall {
+    name: string
+    args: any
+    result?: any
+    status: 'calling' | 'completed' | 'error'
+}
+
 export interface Message {
     id: number
     role: 'user' | 'assistant' | 'system'
     content: string
     thinkingContent?: string
+    toolCalls?: ToolCall[]
     createdAt: number
     sessionId?: number
 }
@@ -165,6 +173,27 @@ export const useSessionStore = defineStore('session', () => {
                     isStreaming.value = true
                     const delta = data.delta || ''
                     messagesMap.value[friendId][msgIndex].content += delta
+                } else if (event === 'tool_call') {
+                    isStreaming.value = true
+                    if (!messagesMap.value[friendId][msgIndex].toolCalls) {
+                        messagesMap.value[friendId][msgIndex].toolCalls = []
+                    }
+                    messagesMap.value[friendId][msgIndex].toolCalls.push({
+                        name: data.tool_name,
+                        args: data.arguments,
+                        status: 'calling'
+                    })
+                } else if (event === 'tool_result') {
+                    isStreaming.value = true
+                    const toolCalls = messagesMap.value[friendId][msgIndex].toolCalls
+                    if (toolCalls) {
+                        // Find the last one with the same name that is still 'calling'
+                        const tc = [...toolCalls].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
+                        if (tc) {
+                            tc.result = data.result
+                            tc.status = 'completed'
+                        }
+                    }
                 } else if (event === 'error') {
                     messagesMap.value[friendId][msgIndex].content += `\n[Error: ${data.detail}]`
                 } else if (event === 'done') {

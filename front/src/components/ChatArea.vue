@@ -9,6 +9,8 @@ import {
   ConversationScrollButton
 } from '@/components/ai-elements/conversation'
 import { MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { useSettingsStore } from '@/stores/settings'
+import { storeToRefs } from 'pinia'
 import {
   PromptInput,
   PromptInputTextarea,
@@ -20,6 +22,12 @@ import {
   ReasoningContent,
   ReasoningTrigger
 } from '@/components/ai-elements/reasoning'
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolOutput
+} from '@/components/ai-elements/tool'
 import ChatDrawerMenu from '@/components/ChatDrawerMenu.vue'
 import { useChat } from '@/composables/useChat'
 import EmojiPicker from '@/components/EmojiPicker.vue'
@@ -37,6 +45,10 @@ const { messages, input, status, isThinkingMode, toggleThinkingMode, handleSubmi
 
 const sessionStore = useSessionStore()
 const friendStore = useFriendStore()
+const settingsStore = useSettingsStore()
+
+// System settings for display
+const { showThinking: sysShowThinking, showToolCalls: sysShowToolCalls } = storeToRefs(settingsStore)
 
 // Get current friend's name for header
 const currentFriendName = computed(() => {
@@ -136,6 +148,18 @@ const drawerOpen = ref(false)
 const handleOpenDrawer = () => {
   drawerOpen.value = true
 }
+
+const formatToolArgs = (args: any) => {
+  if (!args) return ''
+  if (typeof args === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(args), null, 2)
+    } catch {
+      return args
+    }
+  }
+  return JSON.stringify(args, null, 2)
+}
 </script>
 
 <template>
@@ -183,7 +207,8 @@ const handleOpenDrawer = () => {
             </div>
             <div v-else class="message-group" :class="msg.role === 'user' ? 'group-user' : 'group-assistant'">
               <!-- Thinking Block (Assistant Only) - Placed above the message row -->
-              <div v-if="msg.role === 'assistant' && msg.thinkingContent" class="reasoning-external-container">
+              <div v-if="msg.role === 'assistant' && msg.thinkingContent && sysShowThinking"
+                class="reasoning-external-container">
                 <Reasoning :is-streaming="status === 'submitted' && index === messages.length - 1"
                   class="reasoning-block">
                   <ReasoningTrigger />
@@ -199,6 +224,25 @@ const handleOpenDrawer = () => {
 
                 <!-- Message Bubble -->
                 <div class="message-bubble-container">
+                  <!-- Tool Calls (Assistant Only) -->
+                  <div v-if="msg.role === 'assistant' && msg.toolCalls?.length && sysShowToolCalls"
+                    class="tool-calls-container">
+                    <Tool v-for="(tool, idx) in msg.toolCalls" :key="idx" class="m-0 mb-2 bg-white">
+                      <ToolHeader :title="tool.name === 'recall_memory' ? '记忆召回' : tool.name" type="tool-call"
+                        :state="tool.status === 'calling' ? 'input-available' : (tool.status === 'error' ? 'output-error' : 'output-available')"
+                        class="p-2 py-1.5" />
+                      <ToolContent>
+                        <div class="p-3 pt-0">
+                          <div class="text-[10px] font-bold text-muted-foreground uppercase mb-1">Arguments</div>
+                          <pre
+                            class="text-[11px] p-2 bg-muted/30 rounded overflow-x-auto">{{ formatToolArgs(tool.args) }}</pre>
+                        </div>
+                        <ToolOutput v-if="tool.result" :output="tool.result" :error-text="undefined"
+                          class="p-0 border-t" />
+                      </ToolContent>
+                    </Tool>
+                  </div>
+
                   <!-- Loading state for assistant message -->
                   <div v-if="isMessageLoading(msg, index)" class="message-bubble loading-bubble">
                     <Loader class="h-5 w-5 text-gray-400" />
@@ -629,5 +673,16 @@ const handleOpenDrawer = () => {
   .reasoning-external-container {
     max-width: calc(85% - 50px);
   }
+}
+
+.tool-calls-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+:deep(.tool-calls-container .tool) {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 </style>

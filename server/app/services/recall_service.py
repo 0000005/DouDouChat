@@ -84,7 +84,20 @@ class RecallService:
         space_id: str,
         messages: Iterable[Any],
         friend_id: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
+        """
+        执行记忆召回。
+        返回:
+            {
+                "injected_messages": [mock_tool_call, mock_tool_result],
+                "footprints": [
+                    {"type": "thinking", "content": "..."},
+                    {"type": "tool_call", "name": "...", "arguments": "..."},
+                    {"type": "tool_result", "name": "...", "result": "..."},
+                    ...
+                ]
+            }
+        """
         llm_config = (
             db.query(LLMConfig)
             .filter(LLMConfig.deleted == False)
@@ -135,85 +148,73 @@ class RecallService:
 
         agent_messages = cls._normalize_messages(messages)
         if not agent_messages:
-            return []
+            return {"injected_messages": [], "footprints": []}
 
         result = await Runner.run(agent, agent_messages)
 
         tool_outputs: List[Dict[str, Any]] = []
-        tool_call_id: Optional[str] = None
-        tool_call_arguments: Optional[str] = None
-        reasoning_traces: List[str] = []
-        tool_calls: List[Dict[str, Optional[str]]] = []
+        footprints: List[Dict[str, Any]] = []
+        
+        # 用于最后生成 mock 注入的消息
+        all_merged_events = []
+        last_tool_call_id = None
+        last_tool_call_args = None
 
         for item in result.new_items:
             if isinstance(item, ToolCallItem):
                 name, call_id, arguments = cls._extract_tool_call(item)
-                if name == "recall_memory":
-                    tool_call_id = call_id or tool_call_id
-                    tool_call_arguments = arguments or tool_call_arguments
-                    tool_calls.append(
-                        {"call_id": call_id, "arguments": arguments}
-                    )
+                last_tool_call_id = call_id or last_tool_call_id
+                last_tool_call_args = arguments or last_tool_call_args
+                footprints.append({
+                    "type": "tool_call",
+                    "name": name,
+                    "arguments": arguments
+                })
             elif isinstance(item, ToolCallOutputItem):
                 output = item.output
                 if isinstance(output, dict) and "events" in output:
                     tool_outputs.append(output)
+                footprints.append({
+                    "type": "tool_result",
+                    "name": "recall_memory", # 目前只有一个工具
+                    "result": output
+                })
             elif isinstance(item, ReasoningItem):
                 reasoning = cls._extract_reasoning_text(item)
                 if reasoning:
-                    reasoning_traces.append(reasoning)
+                    footprints.append({
+                        "type": "thinking",
+                        "content": reasoning
+                    })
 
         merged_events = cls._merge_events(tool_outputs, event_topk)
 
-        if tool_calls:
-            for idx, call in enumerate(tool_calls, start=1):
-                args = call.get("arguments") or ""
-                logger.info(
-                    "RecallService round %s/%s call_id=%s args=%s",
-                    idx,
-                    len(tool_calls),
-                    call.get("call_id"),
-                    args,
-                )
-                if idx <= len(tool_outputs):
-                    logger.info(
-                        "RecallService round %s result events=%s",
-                        idx,
-                        len(tool_outputs[idx - 1].get("events", []) or []),
-                    )
-        else:
-            logger.info("RecallService ran with 0 tool calls")
+        if not last_tool_call_id:
+            last_tool_call_id = f"recall_{uuid.uuid4().hex}"
 
-        if not tool_call_id:
-            tool_call_id = f"recall_{uuid.uuid4().hex}"
-
-        if not tool_call_arguments:
+        if not last_tool_call_args:
             last_user = next(
                 (msg["content"] for msg in reversed(agent_messages) if msg.get("role") == "user"),
                 "",
             )
-            tool_call_arguments = json.dumps({"query": last_user or ""}, ensure_ascii=False)
+            last_tool_call_args = json.dumps({"query": last_user or ""}, ensure_ascii=False)
 
         tool_call_item = {
             "type": "function_call",
-            "call_id": tool_call_id,
+            "call_id": last_tool_call_id,
             "name": "recall_memory",
-            "arguments": tool_call_arguments,
+            "arguments": last_tool_call_args,
         }
         tool_result_item = {
             "type": "function_call_output",
-            "call_id": tool_call_id,
+            "call_id": last_tool_call_id,
             "output": json.dumps({"events": merged_events}, ensure_ascii=False),
         }
 
-        if reasoning_traces:
-            logger.debug("Recall reasoning traces collected: %s", len(reasoning_traces))
-        logger.info("RecallService merged %s events", len(merged_events))
-        if merged_events:
-            preview = []
-            for event in merged_events[: min(5, len(merged_events))]:
-                content = event.get("content") if isinstance(event, dict) else ""
-                preview.append(content)
-            logger.info("RecallService merged event preview=%s", preview)
+        logger.info("RecallService merged %s events, generated %s footprints", len(merged_events), len(footprints))
 
-        return [tool_call_item, tool_result_item]
+        return {
+            "injected_messages": [tool_call_item, tool_result_item],
+            "footprints": footprints
+        }
+
