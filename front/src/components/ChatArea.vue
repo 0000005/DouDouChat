@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
-import { Menu, Plus, Mic, Smile, MoreHorizontal, Brain, MessageSquarePlus } from 'lucide-vue-next'
+import { Menu, MoreHorizontal, Brain, MessageSquarePlus } from 'lucide-vue-next'
 import {
   Conversation,
   ConversationContent,
@@ -22,6 +22,7 @@ import {
 } from '@/components/ai-elements/reasoning'
 import ChatDrawerMenu from '@/components/ChatDrawerMenu.vue'
 import { useChat } from '@/composables/useChat'
+import EmojiPicker from '@/components/EmojiPicker.vue'
 
 const props = defineProps({
   isSidebarCollapsed: {
@@ -223,12 +224,7 @@ const handleOpenDrawer = () => {
     <!-- Input Area -->
     <div class="chat-input-area">
       <div class="input-toolbar">
-        <button class="toolbar-btn" title="表情">
-          <Smile :size="22" />
-        </button>
-        <button class="toolbar-btn" title="文件">
-          <Plus :size="22" />
-        </button>
+        <EmojiPicker @select="input += $event" />
         <button class="toolbar-btn" title="新会话" @click="handleNewChat">
           <MessageSquarePlus :size="22" />
         </button>
@@ -238,9 +234,7 @@ const handleOpenDrawer = () => {
         <PromptInputTextarea v-model="input" placeholder="输入消息..." class="input-textarea" />
         <div class="input-footer">
           <div class="footer-left">
-            <button class="voice-btn" title="语音">
-              <Mic :size="18" />
-            </button>
+
 
             <!-- Thinking Mode Toggle -->
             <button type="button" class="thinking-btn" :class="{ 'active': isThinkingMode }"

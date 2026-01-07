@@ -18,7 +18,7 @@ export function useChat() {
     const status = computed(() => {
         if (store.isStreaming) return 'streaming'
         if (isSubmitting.value) return 'submitted'
-        return 'idle'
+        return 'ready'
     })
 
     // Thinking mode state
