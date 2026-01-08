@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import {
   MessageCircle,
-  Users,
   Settings,
   Menu,
   User
@@ -14,7 +13,7 @@ import {
 } from '@/components/ui/popover'
 
 defineProps<{
-  activeTab: 'chat' | 'contacts'
+  activeTab: 'chat'
 }>()
 
 const emit = defineEmits<{
@@ -37,7 +36,6 @@ const handleOpenSettings = () => {
 
 const navItems = [
   { id: 'chat', icon: MessageCircle, label: '聊天' },
-  { id: 'contacts', icon: Users, label: '联系人' },
 ]
 </script>
 
