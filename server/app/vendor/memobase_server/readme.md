@@ -1,11 +1,11 @@
 # Memobase SDK (Vendored)
 
 > **⚠️ WARNING: Vendored Code**
-> This directory acts as the core engine of the DouDouChat memory system. It has been adapted from the standalone Memobase project to run as an embedded SDK.
+> This directory acts as the core engine of the WeAgentChat memory system. It has been adapted from the standalone Memobase project to run as an embedded SDK.
 
 ## Overview
 
-Previously a standalone FastAPI service, this module (`memobase_server`) is now integrated directly into the `DouDouChat` main server process to provide:
+Previously a standalone FastAPI service, this module (`memobase_server`) is now integrated directly into the `WeAgentChat` main server process to provide:
 - **Dual-Track Memory**: Long-term profile + Event-based episodes.
 - **Embedded Execution**: Runs within the same process as the main app, managed by `server/app/main.py` lifespan.
 - **Unified config**: Uses the main application's configuration system explicitly.

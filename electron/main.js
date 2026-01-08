@@ -48,7 +48,7 @@ function createTray() {
   const iconPath = resolveTrayIconPath()
   const trayIcon = nativeImage.createFromPath(iconPath)
   tray = new Tray(trayIcon)
-  tray.setToolTip('DouDouChat')
+  tray.setToolTip('WeAgentChat')
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -184,8 +184,8 @@ function resolveBackendExecutable(backendDir) {
 
   const candidates = [
     'wechatagent.exe',
-    'doudouchat-server.exe',
-    'doudouchat-backend.exe',
+    'WeAgentChat-server.exe',
+    'WeAgentChat-backend.exe',
     'server.exe',
     'backend.exe',
   ]
@@ -268,7 +268,7 @@ async function startBackend() {
     cwd: path.dirname(backendExe),
     env: {
       ...process.env,
-      DOUDOUCHAT_DATA_DIR: dataDir,
+      WeAgentChat_DATA_DIR: dataDir,
       PORT: String(port),
     },
     stdio: ['ignore', 'pipe', 'pipe'],

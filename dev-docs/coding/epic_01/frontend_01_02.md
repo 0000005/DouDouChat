@@ -44,9 +44,9 @@
 
 ## 3. 现状分析快照
 - **分析文件列表**:
-    - `e:/workspace/code/DouDouChat/front/src/components/Sidebar.vue`: 目前使用静态 `chatHistory` 数组，第 61-71 行是会话项渲染。
-    - `e:/workspace/code/DouDouChat/front/src/composables/useMockChat.ts`: 第 11-18 行定义了局部的 `messages` ref，需要重构为读取 Store。
-    - `e:/workspace/code/DouDouChat/front/src/components/ChatArea.vue`: 直接调用 `useMockChat`。
+    - `e:/workspace/code/WeAgentChat/front/src/components/Sidebar.vue`: 目前使用静态 `chatHistory` 数组，第 61-71 行是会话项渲染。
+    - `e:/workspace/code/WeAgentChat/front/src/composables/useMockChat.ts`: 第 11-18 行定义了局部的 `messages` ref，需要重构为读取 Store。
+    - `e:/workspace/code/WeAgentChat/front/src/components/ChatArea.vue`: 直接调用 `useMockChat`。
 - **关键发现**:
     - 项目中尚未创建 `stores` 目录。
     - `Sidebar.vue` 缺乏删除逻辑和上下文菜单触发器。
@@ -62,7 +62,7 @@
     - **Conversation** (绑定当前会话的消息)
 
 ### 4.2 状态管理 (Session Store)
-**Store 定位**: `e:/workspace/code/DouDouChat/front/src/stores/session.ts`
+**Store 定位**: `e:/workspace/code/WeAgentChat/front/src/stores/session.ts`
 - **State 定义**:
     - `sessions`: `Session[]` (`{ id, title, createdAt }`)
     - `messagesMap`: `Record<string, Message[]>`
@@ -81,15 +81,15 @@
 ## 5. 详细变更清单
 | 序号 | 操作类型 | 文件绝对路径 | 变更摘要 |
 |------|----------|--------------|----------|
-| 1    | 新增     | `e:/workspace/code/DouDouChat/front/src/stores/session.ts` | 创建多会话管理中心 Store |
-| 2    | 修改     | `e:/workspace/code/DouDouChat/front/src/composables/useMockChat.ts` | 重构以接入全局 Store，移除本地 Ref |
-| 3    | 修改     | `e:/workspace/code/DouDouChat/front/src/components/Sidebar.vue` | 接入 Store 列表渲染，添加“新对话”和右键菜单逻辑 |
-| 4    | 修改     | `e:/workspace/code/DouDouChat/front/src/components/ChatArea.vue` | 更新 header 标题显示为当前会话名 |
+| 1    | 新增     | `e:/workspace/code/WeAgentChat/front/src/stores/session.ts` | 创建多会话管理中心 Store |
+| 2    | 修改     | `e:/workspace/code/WeAgentChat/front/src/composables/useMockChat.ts` | 重构以接入全局 Store，移除本地 Ref |
+| 3    | 修改     | `e:/workspace/code/WeAgentChat/front/src/components/Sidebar.vue` | 接入 Store 列表渲染，添加“新对话”和右键菜单逻辑 |
+| 4    | 修改     | `e:/workspace/code/WeAgentChat/front/src/components/ChatArea.vue` | 更新 header 标题显示为当前会话名 |
 
 ## 6. 分步实施指南 (Atomic Steps)
 
 ### 步骤 1: 构建 Session Store
-- **操作文件**: `e:/workspace/code/DouDouChat/front/src/stores/session.ts`
+- **操作文件**: `e:/workspace/code/WeAgentChat/front/src/stores/session.ts`
 - **操作描述**: 
     1. 定义接口 `Session` 和 `Message`。
     2. 实现状态初始化：尝试从本地读取 JSON，解析失败则使用默认值。
@@ -99,7 +99,7 @@
 - **验证方法**: 手动修改控制台中的 Store 状态，观察 `localStorage` 是否同步。
 
 ### 步骤 2: 重构 useMockChat
-- **操作文件**: `e:/workspace/code/DouDouChat/front/src/composables/useMockChat.ts`
+- **操作文件**: `e:/workspace/code/WeAgentChat/front/src/composables/useMockChat.ts`
 - **操作描述**:
     1. 引入 `useSessionStore`。
     2. 将 `messages` 定义改为返回 `computed(() => store.currentMessages)`。
@@ -107,7 +107,7 @@
 - **验证方法**: 发送消息，确认消息被正确路由到了当前活跃会话中。
 
 ### 步骤 3: 改造侧边栏 UI
-- **操作文件**: `e:/workspace/code/DouDouChat/front/src/components/Sidebar.vue`
+- **操作文件**: `e:/workspace/code/WeAgentChat/front/src/components/Sidebar.vue`
 - **操作描述**:
     1. 移除静态 `chatHistory` 数组。
     2. 计算属性 `groupedSessions`：根据 `createdAt` 对 `store.sessions` 进行分组（今天/更早）。
@@ -117,7 +117,7 @@
 - **验证方法**: 点击“新对话”，观察侧边栏是否出现新项；点击不同会话，观察聊天主界面内容是否变化。
 
 ### 步骤 4: 接入删除确认 Dialog
-- **操作文件**: `e:/workspace/code/DouDouChat/front/src/components/Sidebar.vue`
+- **操作文件**: `e:/workspace/code/WeAgentChat/front/src/components/Sidebar.vue`
 - **操作描述**:
     1. 引入 `Dialog` 及其子组件。
     2. 在底部或组件外围定义全局删除确认框，状态由局部 Ref 控制（存储待删除的 sessionId）。

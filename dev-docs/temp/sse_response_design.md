@@ -1,4 +1,4 @@
-# DouDouChat SSE 响应结构设计文档
+# WeAgentChat SSE 响应结构设计文档
 
 ## 1. 概述 (Overview)
 

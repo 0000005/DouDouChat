@@ -1,7 +1,7 @@
 # Electron 桌面客户端封装技术方案
 
 ## 1. 目标
-将现有的 DouDouChat Web 项目（Vue 3 前端 + FastAPI 后端）封装为单体桌面应用（Windows），实现一键安装、启动，并保留原有的完整功能。
+将现有的 WeAgentChat Web 项目（Vue 3 前端 + FastAPI 后端）封装为单体桌面应用（Windows），实现一键安装、启动，并保留原有的完整功能。
 
 ## 2. 技术选型
 *   **容器框架**: Electron (最新稳定版)
@@ -26,7 +26,7 @@
 建议在根目录下新建 `electron` 目录存放相关代码，保持 `front` 和 `server` 相对独立。
 
 ```
-DouDouChat/
+WeAgentChat/
 ├── electron/                 # [新增] Electron 相关代码
 │   ├── main.js               # Electron 主进程入口
 │   ├── preload.js            # 预加载脚本 (IPC)
@@ -43,7 +43,7 @@ DouDouChat/
 
 ### 4.1 后端改造与打包 (Server)
 1.  **路径适配**: 
-    *   数据库文件 (`doudou.db`, `memobase.db`) 和日志文件在生产环境必须存储在用户的 **AppData** 目录 (`%APPDATA%/DouDouChat`)，因为安装目录 (`Program Files`) 通常是只读的。
+    *   数据库文件 (`doudou.db`, `memobase.db`) 和日志文件在生产环境必须存储在用户的 **AppData** 目录 (`%APPDATA%/WeAgentChat`)，因为安装目录 (`Program Files`) 通常是只读的。
     *   需要修改 `server/app/core/config.py`，支持通过环境变量或启动参数 (`--data-dir`) 覆盖默认的数据存储路径。
 2.  **PyInstaller 配置**: 
     *   编写 `.spec` 文件，确保包含所有 Python 依赖。
@@ -94,7 +94,7 @@ DouDouChat/
 
 ## 7. 本次任务进度更新
 ### 7.1 已完成事项
-*   **后端数据目录可配置**: `server/app/core/config.py` 支持 `DOUDOUCHAT_DATA_DIR` 环境变量覆盖默认数据目录。
+*   **后端数据目录可配置**: `server/app/core/config.py` 支持 `WeAgentChat_DATA_DIR` 环境变量覆盖默认数据目录。
 *   **后端 CLI 入口**: 新增 `server/app/cli.py`，支持 `--port` 与 `--data-dir` 启动参数，便于 Electron 调用。
 *   **前端 API 基地址适配**: 新增 `front/src/api/base.ts` 与 `front/src/env.d.ts`，统一从 Electron 注入变量/环境变量解析 API Base URL。
 *   **前端 API 接口改造**: `front/src/api/*.ts` 已改为使用 `withApiBase()` 进行请求。

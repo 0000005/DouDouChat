@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: DouDouChat - Llm API
+  title: WeAgentChat - Llm API
   description: OpenAPI specification for the llm module
   version: 1.0.0
 paths:

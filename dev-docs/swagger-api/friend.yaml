@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: DouDouChat - Friend API
+  title: WeAgentChat - Friend API
   description: OpenAPI specification for the friend module
   version: 1.0.0
 paths:

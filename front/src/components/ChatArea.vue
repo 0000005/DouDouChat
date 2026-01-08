@@ -46,7 +46,7 @@ const { messages, input, status, isThinkingMode, toggleThinkingMode, handleSubmi
 const sessionStore = useSessionStore()
 const friendStore = useFriendStore()
 const settingsStore = useSettingsStore()
-const isElectron = Boolean(window.doudouchat?.windowControls)
+const isElectron = Boolean(window.WeAgentChat?.windowControls)
 const isMaximized = ref(false)
 let unsubscribeWindowState: (() => void) | null = null
 
@@ -158,17 +158,17 @@ const updateWindowState = (state: { isMaximized: boolean }) => {
 
 const handleMinimize = () => {
   if (!isElectron) return
-  window.doudouchat?.windowControls?.minimize()
+  window.WeAgentChat?.windowControls?.minimize()
 }
 
 const handleToggleMaximize = () => {
   if (!isElectron) return
-  window.doudouchat?.windowControls?.toggleMaximize()
+  window.WeAgentChat?.windowControls?.toggleMaximize()
 }
 
 const handleCloseWindow = () => {
   if (!isElectron) return
-  window.doudouchat?.windowControls?.close()
+  window.WeAgentChat?.windowControls?.close()
 }
 
 const handleHeaderContextMenu = (event: MouseEvent) => {
@@ -176,7 +176,7 @@ const handleHeaderContextMenu = (event: MouseEvent) => {
   const target = event.target as HTMLElement | null
   if (target?.closest('button')) return
   event.preventDefault()
-  window.doudouchat?.windowControls?.showSystemMenu({
+  window.WeAgentChat?.windowControls?.showSystemMenu({
     x: event.screenX,
     y: event.screenY,
   })
@@ -184,7 +184,7 @@ const handleHeaderContextMenu = (event: MouseEvent) => {
 
 onMounted(async () => {
   if (!isElectron) return
-  const controls = window.doudouchat?.windowControls
+  const controls = window.WeAgentChat?.windowControls
   if (!controls) return
   try {
     const state = await controls.getState()

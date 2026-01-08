@@ -1,5 +1,5 @@
 appId: com.doudou.chat
-productName: DouDouChat
+productName: WeAgentChat
 files:
   - electron/**/*
   - front/dist/**/*

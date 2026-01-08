@@ -13,12 +13,12 @@ deterministic UUIDs from semantic namespace strings. This ensures:
 """
 import uuid
 
-# Deterministic UUID namespace for DouDouChat
-DOUDOUCHAT_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "doudouchat.memory")
+# Deterministic UUID namespace for WeAgentChat
+WeAgentChat_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "WeAgentChat.memory")
 
 # Default user ID - generated from semantic string for single-user mode
 # Equivalent to the document requirement "default_user", but as a valid UUID
-DEFAULT_USER_ID = str(uuid.uuid5(DOUDOUCHAT_NAMESPACE, "default_user"))
+DEFAULT_USER_ID = str(uuid.uuid5(WeAgentChat_NAMESPACE, "default_user"))
 
 # Default space ID - uses the SDK's built-in root project
 # The "__root__" project is auto-created by the SDK and is the only writable project

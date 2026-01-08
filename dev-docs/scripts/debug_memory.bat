@@ -1,13 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: DouDouChat Memory Debug Tool
+:: WeAgentChat Memory Debug Tool
 set BASE_URL=http://localhost:8000/api
 
 :START
 cls
 echo ======================================================
-echo          DouDouChat Memory Debug Tool
+echo          WeAgentChat Memory Debug Tool
 echo ======================================================
 echo.
 

@@ -6,7 +6,7 @@ from fastapi.openapi.utils import get_openapi
 
 # Ensure we can import from the 'server' directory
 # The script is now in 'dev-docs/scripts', 
-# so we need to add 'E:\workspace\code\DouDouChat\server' to path
+# so we need to add 'E:\workspace\code\WeAgentChat\server' to path
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 server_dir = os.path.join(root_dir, "server")
 sys.path.append(server_dir)
@@ -30,7 +30,7 @@ def export_docs():
     print(f"Exporting OpenAPI specs to: {output_dir}")
 
     for name, config in routes_map.items():
-        sub_app = FastAPI(title=f"DouDouChat - {name.capitalize()} API")
+        sub_app = FastAPI(title=f"WeAgentChat - {name.capitalize()} API")
         sub_app.include_router(config["router"], prefix=config["prefix"])
 
         openapi_schema = get_openapi(

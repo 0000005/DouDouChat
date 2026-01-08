@@ -1,7 +1,7 @@
 # Memobase SDK 嵌入改造方案 (SDK Integration Plan)
 
 ## 1. 目标与背景
-`mem-system` 目前作为一个独立的 FastAPI 服务运行。为了降低系统复杂度、减少 HTTP 通信开销并提升整体可靠性，计划将其改造为 SDK 模式，直接嵌入到 `DouDouChat` 的主后端 (`server/`) 中。
+`mem-system` 目前作为一个独立的 FastAPI 服务运行。为了降低系统复杂度、减少 HTTP 通信开销并提升整体可靠性，计划将其改造为 SDK 模式，直接嵌入到 `WeAgentChat` 的主后端 (`server/`) 中。
 
 实现后的效果：
 - **单进程运行**：主后端进程启动时，自动初始化并运行记忆系统。

@@ -107,7 +107,7 @@ Unlike traditional AI chat tools, WeAgentChat simulates a WeChat-like multi-dime
 ## Current Status & Structure
 The project is currently in the **active development phase**.
 
-*   **Root Directory:** `e:\workspace\code\DouDouChat`
+*   **Root Directory:** `e:\workspace\code\WeAgentChat`
 
 ---
 
@@ -193,7 +193,7 @@ Electron wrapper for packaging the app as a standalone desktop application.
     *   Handles port allocation and data directory injection
 *   **`preload.js`**: Context bridge for frontend-backend communication.
     *   Exposes `window.__BACKEND_PORT__` and `window.__BACKEND_URL__`
-    *   Exposes `window.doudouchat` object with backend info
+    *   Exposes `window.WeAgentChat` object with backend info
 *   **`splash.html`**: Loading screen shown during backend startup.
 
 #### 📁 Configuration (Root Directory)
@@ -214,7 +214,7 @@ Electron wrapper for packaging the app as a standalone desktop application.
 *   `DOU_DOUCHAT_DEV_SERVER_URL`: Override dev server URL (default: `http://localhost:5173`)
 *   `DOU_DOUCHAT_BACKEND_PORT`: Override backend port in dev mode (default: `8000`)
 *   `DOU_DOUCHAT_BACKEND_EXE`: Explicit path to backend executable
-*   `DOUDOUCHAT_DATA_DIR`: Data directory for production (auto-set to AppData)
+*   `WeAgentChat_DATA_DIR`: Data directory for production (auto-set to AppData)
 
 ---
 

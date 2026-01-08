@@ -4,7 +4,7 @@ set BASE_DIR=%~dp0
 cd /d %BASE_DIR%server
 
 echo ========================================
-echo   DouDouChat 数据库迁移生成工具
+echo   WeAgentChat 数据库迁移生成工具
 echo ========================================
 
 if not exist venv\Scripts\alembic.exe (

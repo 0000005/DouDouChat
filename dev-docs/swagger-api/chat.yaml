@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: DouDouChat - Chat API
+  title: WeAgentChat - Chat API
   description: OpenAPI specification for the chat module
   version: 1.0.0
 paths:

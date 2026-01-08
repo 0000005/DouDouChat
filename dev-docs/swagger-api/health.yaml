@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: DouDouChat - Health API
+  title: WeAgentChat - Health API
   description: OpenAPI specification for the health module
   version: 1.0.0
 paths:

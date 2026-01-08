@@ -7,7 +7,7 @@ const backendUrl =
 
 contextBridge.exposeInMainWorld('__BACKEND_PORT__', backendPort)
 contextBridge.exposeInMainWorld('__BACKEND_URL__', backendUrl)
-contextBridge.exposeInMainWorld('doudouchat', {
+contextBridge.exposeInMainWorld('WeAgentChat', {
   backendPort,
   backendUrl,
   isElectron: true,
@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld('doudouchat', {
     getState: () => ipcRenderer.invoke('window:get-state'),
     showSystemMenu: (position) => ipcRenderer.send('window:show-system-menu', position),
     onState: (callback) => {
-      if (typeof callback !== 'function') return () => {}
+      if (typeof callback !== 'function') return () => { }
       const listener = (_event, state) => callback(state)
       ipcRenderer.on('window:state', listener)
       return () => ipcRenderer.removeListener('window:state', listener)

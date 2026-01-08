@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: DouDouChat - Embedding API
+  title: WeAgentChat - Embedding API
   description: OpenAPI specification for the embedding module
   version: 1.0.0
 paths:

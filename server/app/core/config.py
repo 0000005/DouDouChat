@@ -3,13 +3,13 @@ from pydantic_settings import BaseSettings
 
 
 def _resolve_data_dir(base_dir: str) -> str:
-    override = os.getenv("DOUDOUCHAT_DATA_DIR") or os.getenv("DATA_DIR")
+    override = os.getenv("WeAgentChat_DATA_DIR") or os.getenv("DATA_DIR")
     if override:
         return os.path.abspath(os.path.expandvars(override))
     return os.path.join(base_dir, "data")
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "DouDouChat Server"
+    PROJECT_NAME: str = "WeAgentChat Server"
     API_STR: str = "/api"
 
     # Database

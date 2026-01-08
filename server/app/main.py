@@ -114,4 +114,4 @@ app.include_router(api_router, prefix=settings.API_STR)
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to DouDouChat API"}
+    return {"message": "Welcome to WeAgentChat API"}

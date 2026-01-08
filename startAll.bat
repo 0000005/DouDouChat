@@ -12,19 +12,19 @@ echo Killing existing Frontend process on port 5173...
 powershell -Command "Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"
 
 echo.
-echo [INFO] Starting DouDouChat...
+echo [INFO] Starting WeAgentChat...
 
 :: Start Backend
 echo Starting Backend...
-start "DouDouChat Backend" cmd /k "cd server && venv\Scripts\python -m uvicorn app.main:app --reload --port 8000"
+start "WeAgentChat Backend" cmd /k "cd server && venv\Scripts\python -m uvicorn app.main:app --reload --port 8000"
 
 :: Start Frontend
 echo Starting Frontend...
-start "DouDouChat Frontend" cmd /k "cd front && pnpm dev"
+start "WeAgentChat Frontend" cmd /k "cd front && pnpm dev"
 
 echo.
 echo ==========================================================
-echo   DouDouChat is starting!
+echo   WeAgentChat is starting!
 echo ==========================================================
 echo   Backend API Docs:  http://localhost:8000/docs
 echo   Frontend UI:       http://localhost:5173

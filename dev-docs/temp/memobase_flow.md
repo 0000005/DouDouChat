@@ -1,6 +1,6 @@
 # Memobase 记忆保存流程梳理
 
-本文档梳理了 DouDouChat 中集成 Memobase SDK 后，记忆生成的完整生命周期，包括触发机制、数据流转以及 Memobase 内部的处理逻辑。
+本文档梳理了 WeAgentChat 中集成 Memobase SDK 后，记忆生成的完整生命周期，包括触发机制、数据流转以及 Memobase 内部的处理逻辑。
 
 ## 1. 流程图 (Mermaid)
 

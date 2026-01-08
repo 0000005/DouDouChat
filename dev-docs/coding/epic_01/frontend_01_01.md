@@ -16,10 +16,10 @@
 ### 2.1 依赖检查
 - [x] 确保已安装包: `ai` (Vercel AI SDK Core), `vue`
 - [x] 确保文件存在: 
-    - `e:/workspace/code/DouDouChat/front/src/components/ai-elements/conversation/index.ts`
-    - `e:/workspace/code/DouDouChat/front/src/components/ai-elements/message/index.ts`
-    - `e:/workspace/code/DouDouChat/front/src/components/ai-elements/prompt-input/index.ts`
-    - `e:/workspace/code/DouDouChat/front/src/components/ai-elements/loader/index.ts`
+    - `e:/workspace/code/WeAgentChat/front/src/components/ai-elements/conversation/index.ts`
+    - `e:/workspace/code/WeAgentChat/front/src/components/ai-elements/message/index.ts`
+    - `e:/workspace/code/WeAgentChat/front/src/components/ai-elements/prompt-input/index.ts`
+    - `e:/workspace/code/WeAgentChat/front/src/components/ai-elements/loader/index.ts`
 
 ### 2.2 参考文档
 - **核心组件用法**:
@@ -47,8 +47,8 @@
 
 ## 3. 现状分析快照
 - **分析文件列表**:
-    - `e:/workspace/code/DouDouChat/front/src/components/ChatArea.vue` (上次修改: 2025-12-29, 包含硬编码 UI 和 mock 数据)
-    - `e:/workspace/code/DouDouChat/front/src/App.vue` (布局容器)
+    - `e:/workspace/code/WeAgentChat/front/src/components/ChatArea.vue` (上次修改: 2025-12-29, 包含硬编码 UI 和 mock 数据)
+    - `e:/workspace/code/WeAgentChat/front/src/App.vue` (布局容器)
 - **关键发现**:
     - `ChatArea.vue` 目前使用手动编写的 HTML/Tailwind 实现消息气泡和输入框，未利用已有的 `ai-elements` 组件。
     - 消息数据 `messages` 是组件内定义的 `ref`，包含硬编码的示例数据。
@@ -71,7 +71,7 @@
 ### 4.2 状态管理 (Composable: `useMockChat`)
 为了保持组件逻辑纯净，且模仿 Vercel AI SDK 的 `useChat` API 风格，我们将逻辑抽取到 Composable 中。
 
-**File**: `e:/workspace/code/DouDouChat/front/src/composables/useMockChat.ts`
+**File**: `e:/workspace/code/WeAgentChat/front/src/composables/useMockChat.ts`
 
 - **State**:
     - `messages`: `Ref<Message[]>` (Message: `{ id, role, content, createdAt }`)
@@ -97,13 +97,13 @@
 ## 5. 详细变更清单
 | 序号 | 操作类型 | 文件绝对路径 | 变更摘要 |
 |------|----------|--------------|----------|
-| 1    | 新增     | `e:/workspace/code/DouDouChat/front/src/composables/useMockChat.ts` | 创建 Mock 聊天逻辑 Hook |
-| 2    | 修改     | `e:/workspace/code/DouDouChat/front/src/components/ChatArea.vue` | 移除硬编码 UI，替换为 `ai-elements-vue` 组件，接入 `useMockChat` |
+| 1    | 新增     | `e:/workspace/code/WeAgentChat/front/src/composables/useMockChat.ts` | 创建 Mock 聊天逻辑 Hook |
+| 2    | 修改     | `e:/workspace/code/WeAgentChat/front/src/components/ChatArea.vue` | 移除硬编码 UI，替换为 `ai-elements-vue` 组件，接入 `useMockChat` |
 
 ## 6. 分步实施指南 (Atomic Steps)
 
 ### 步骤 1: 实现 useMockChat Composable
-- **操作文件**: `e:/workspace/code/DouDouChat/front/src/composables/useMockChat.ts` (需新建目录 `composables` 如果不存在)
+- **操作文件**: `e:/workspace/code/WeAgentChat/front/src/composables/useMockChat.ts` (需新建目录 `composables` 如果不存在)
 - **操作描述**:
     1.  定义 `Message` 接口 (`id`, `role`, `content` 等)。
     2.  导出 `useMockChat` 函数。
@@ -113,7 +113,7 @@
     - 暂时无法直接运行，需通过步骤 2 集成后验证，或简单编写测试脚本。
 
 ### 步骤 2: 重构 ChatArea.vue
-- **操作文件**: `e:/workspace/code/DouDouChat/front/src/components/ChatArea.vue`
+- **操作文件**: `e:/workspace/code/WeAgentChat/front/src/components/ChatArea.vue`
 - **操作描述**:
     1.  引入 `useMockChat`。
     2.  引入 `ai-elements-vue` 组件: `Conversation`, `Message`, `PromptInput` 等。

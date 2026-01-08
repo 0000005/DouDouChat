@@ -1,4 +1,4 @@
--- DouDouChat Database Initialization Script
+-- WeAgentChat Database Initialization Script
 
 -- 1. Friend Table (好友/AI 角色)
 CREATE TABLE IF NOT EXISTS friends (
