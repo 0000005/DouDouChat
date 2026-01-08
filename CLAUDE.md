@@ -37,6 +37,18 @@ Unlike traditional AI chat tools, WeAgentChat simulates a WeChat-like multi-dime
 2.  Run server: `venv\Scripts\python -m uvicorn app.main:app --reload`
 3.  Access docs: `http://localhost:8000/docs`
 
+### Desktop (Electron)
+1.  Start backend and frontend servers first (see above).
+2.  Run Electron dev mode at root: `pnpm electron:dev`
+3.  The app will load from `http://localhost:5173` with backend at `http://localhost:8000`.
+
+### Production Build (Desktop)
+1.  Run one-click packaging script: `scripts\package-electron.bat`
+2.  Output will be in `dist-electron/`
+3.  Or step-by-step:
+    *   Build backend with PyInstaller (output to `build/backend`)
+    *   Run `pnpm electron:build` at project root
+
 ## Tech Stack
 ### Frontend (`front/`)
 *   **Framework:** Vue 3.5+ (Composition API)
@@ -65,6 +77,17 @@ Unlike traditional AI chat tools, WeAgentChat simulates a WeChat-like multi-dime
 *   **Utilities:** python-multipart (for form data)
 *   **Structure:** Layered Architecture (API -> Service -> Models/Schemas)
 *   **API Prefix:** `/api`
+
+### Desktop (`electron/`)
+*   **Framework:** Electron 32+
+*   **Builder:** electron-builder 24
+*   **Process Management:** tree-kill (for graceful backend shutdown)
+*   **Backend Packaging:** PyInstaller (onedir mode)
+*   **Architecture:**
+    *   Main process spawns Python backend as child process
+    *   Preload script injects backend port via `contextBridge`
+    *   Splash screen during backend initialization
+    *   Health check polling before showing main window
 
 ### About ai-elements-vue
 
@@ -96,16 +119,22 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `ai-elements/`: AI-native components (Reasoning, Tool, Canvas, etc.) from `ai-elements-vue`.
     *   `ui/`: Base UI primitives (via shadcn-vue, e.g., HoverCard, Dialog, Button).
     *   `ChatArea.vue`: Main message terminal (supports SSE events & reasoning).
+    *   `ChatDrawerMenu.vue`: WeChat-style drawer for chat settings and actions.
     *   `Sidebar.vue`: Session list and search.
     *   `IconSidebar.vue`: Vertical icon menu (WeChat style).
     *   `SettingsDialog.vue`: Management of LLM, Memory, and System settings.
+    *   `ProfileDialog.vue`: User profile management.
+    *   `EmojiPicker.vue`: WeChat-style emoji selection.
 *   **`stores/`**: Pinia state management.
     *   `session.ts`: Chat session buffers, SSE event parsing, and message history.
     *   `friend.ts`: Persona/Friend metadata and state.
     *   `llm.ts` & `embedding.ts`: Global config synchronization with backend.
     *   `settings.ts`: System-wide settings (e.g., memory expiration).
+    *   `memory.ts`: Long-term memory and recall state.
+    *   `thinkingMode.ts`: Global setting for LLM reasoning display.
 *   **`api/`**: Strongly typed REST & SSE clients.
-    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`.
+    *   `base.ts`: Base API configuration and Electron port handling.
+    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`.
 *   **`composables/`**: Reusable Vue Composition API logic (e.g., `useChat.ts`).
 *   **`lib/`**: Utility functions (e.g., `utils.ts` for Tailwind/CSS classes).
 
@@ -123,16 +152,22 @@ FastAPI backend with a modular service-oriented architecture.
     *   `profile.py` & `friend.py`: User profile and AI persona management.
     *   `settings.py`: System configuration API.
     *   `llm.py` & `embedding.py`: AI model provider management.
+    *   `health.py`: Health check for Electron and load balancers.
 *   **`services/`**: Business logic layer.
     *   `chat_service.py`: LLM orchestration, message persistence, and memory RAG.
+    *   `recall_service.py`: Multi-step memory recall and agent orchestration.
+    *   `llm_service.py` & `embedding_service.py`: Model provider abstraction.
+    *   `friend_service.py`: Persona and friendship management.
     *   `memo/`: Memory system bridge.
         *   `bridge.py`: Interface to the embedded Memobase SDK.
+        *   `constants.py`: Memory system constants and configuration.
     *   `settings_service.py`: Config defaults and DB persistence.
 *   **`models/`**: SQLAlchemy ORM definitions (SQLite target).
     *   `chat.py`, `friend.py`, `system_setting.py`, `llm.py`, `embedding.py`.
 *   **`schemas/`**: Pydantic data validation and serialization.
-*   **`db/`**: Database initialization (`init_db.py`) and session management.
-*   **`utils/`**: Generic backend utilities (e.g., logging, async helpers).
+    *   `chat.py`, `friend.py`, `llm.py`, `embedding.py`, `memory.py`, `sse_events.py`, `system_setting.py`.
+*   **`db/`**: Database initialization (`init_db.py`, `init.sql`) and session management.
+*   **`core/`**: Core system configuration and `logging.py`.
 *   **`vendor/`**: Third-party modules embedded as SDKs.
     *   **`memobase_server/`**: The core Memory Engine (Event Extraction, RAG).
 
@@ -141,14 +176,56 @@ FastAPI backend with a modular service-oriented architecture.
 *   **`data/`**: Storage for `.db` files.
     *   `doudou.db`: Primary application data.
     *   `memobase.db`: Memory/Vector storage.
+*   **`logs/`**: Backend log files.
+    *   `app.log`: Application runtime logs (rotated daily).
 *   **`tests/`**: Pytest suite (e.g., `test_memo_bridge.py`, `test_chat.py`).
 
 ---
 
+### 🖥️ Desktop (`electron/`)
+Electron wrapper for packaging the app as a standalone desktop application.
+
+#### 📁 Core Files
+*   **`main.js`**: Main process entry point.
+    *   Manages backend lifecycle (spawn, health check, shutdown)
+    *   Creates splash window during startup
+    *   Creates main window after backend is ready
+    *   Handles port allocation and data directory injection
+*   **`preload.js`**: Context bridge for frontend-backend communication.
+    *   Exposes `window.__BACKEND_PORT__` and `window.__BACKEND_URL__`
+    *   Exposes `window.doudouchat` object with backend info
+*   **`splash.html`**: Loading screen shown during backend startup.
+
+#### 📁 Configuration (Root Directory)
+*   **`package.json`**: Electron dependencies and scripts.
+    *   `pnpm electron:dev` - Run in development mode
+    *   `pnpm electron:build` - Build production installer
+    *   `pnpm electron:pack` - Package without installer (for testing)
+*   **`electron-builder.yml`**: Packaging configuration.
+    *   App ID: `com.doudou.chat`
+    *   Output: `dist-electron/`
+    *   Backend bundled as `extraResources`
+
+#### 📁 Build Artifacts
+*   **`build/backend/`**: PyInstaller output (bundled Python backend)
+*   **`dist-electron/`**: Final packaged application
+
+#### 🔧 Environment Variables
+*   `DOU_DOUCHAT_DEV_SERVER_URL`: Override dev server URL (default: `http://localhost:5173`)
+*   `DOU_DOUCHAT_BACKEND_PORT`: Override backend port in dev mode (default: `8000`)
+*   `DOU_DOUCHAT_BACKEND_EXE`: Explicit path to backend executable
+*   `DOUDOUCHAT_DATA_DIR`: Data directory for production (auto-set to AppData)
+
+---
+
 ### 📄 Documentation & Planning (`dev-docs/`)
+*   **`prd/`**: High-level requirements and visual identity.
 *   **`userStroy/`**: Business logic and feature requirements (e.g., `passive_session_memory.md`).
 *   **`coding/`**: Granular implementation plans (Divided by Epics).
 *   **`swagger-api/`**: API definitions (Legacy/Reference).
+*   **`troubleshooting/`**: Guides for common dev issues.
+*   **`scripts/`**: Development and deployment scripts.
+*   **`temp/`**: Temporary documents (e.g., `electron_packaging_plan.md`).
 
 ---
 
@@ -168,7 +245,7 @@ FastAPI backend with a modular service-oriented architecture.
 *   **Backend Environment:**
     *   **Virtual Environment:** A virtual environment is located at `server/venv/`.
     *   **Run Server:** Execute `server\venv\Scripts\python -m uvicorn app.main:app --reload` within the `server` directory to start the backend with auto-reload.
-    *   **Database Operations:** Use the available `db-util` tools (`list_tables`, `execute_sql`) to inspect and modify the SQLite database.
+    *   **Database Operations:** 使用 `sqlite3` 命令（已配置全局环境变量）直接操作数据库文件（如 `sqlite3 server/data/doudou.db`）。
     *   **Database Migrations (Alembic):**
         *   **Automatic Update:** The server automatically applies the latest migrations on startup (`init_db.py` calls `alembic upgrade head`).
         *   **Generate Migration:** Run `gen_migration.bat` in the project root to generate a new migration script after modifying SQLAlchemy models.
@@ -178,6 +255,7 @@ FastAPI backend with a modular service-oriented architecture.
     *   布局（侧边栏、对话列表、聊天窗口的排布）。
     *   交互细节（点击反馈、对话气泡样式等）。
 *   **Unit Testing:** Run tests using `server\venv\Scripts\python -m pytest server/tests`.
+*   **Logging:** Backend logs are output to the console and saved to `server/logs/app.log`, with daily rotation and 30-day retention.
 
 ---
 
