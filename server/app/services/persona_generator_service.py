@@ -106,29 +106,26 @@ class PersonaGeneratorService:
         # 清理内容
         content = content.strip()
         
-        # 尝试直接解析
+        # 按行分割
+        lines = content.split('\n')
+        
+        # 删除首行的 ```json 或 ```
+        if lines and (lines[0].strip().startswith('```json') or lines[0].strip() == '```'):
+            lines = lines[1:]
+        
+        # 删除末行的 ```
+        if lines and lines[-1].strip() == '```':
+            lines = lines[:-1]
+        
+        # 重新组合
+        json_str = '\n'.join(lines).strip()
+        
+        # 尝试解析
         try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
-        
-        # 尝试提取 Markdown JSON 代码块
-        json_patterns = [
-            r'```json\s*([\s\S]*?)\s*```',  # ```json ... ```
-            r'```\s*([\s\S]*?)\s*```',       # ``` ... ```
-            r'\{[\s\S]*\}',                   # 直接匹配 {...}
-        ]
-        
-        for pattern in json_patterns:
-            match = re.search(pattern, content)
-            if match:
-                json_str = match.group(1) if '```' in pattern else match.group(0)
-                try:
-                    return json.loads(json_str.strip())
-                except json.JSONDecodeError:
-                    continue
-        
-        return None
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.debug(f"JSON parse failed: {e}")
+            return None
 
 
 persona_generator_service = PersonaGeneratorService()
