@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -21,6 +20,8 @@ import { useSessionStore } from '@/stores/session'
 import { useToast } from '@/composables/useToast'
 import { Loader2 } from 'lucide-vue-next'
 
+import AssistantWizard from './AssistantWizard.vue'
+
 const emit = defineEmits<{
   (e: 'back-chat'): void
 }>()
@@ -33,7 +34,7 @@ const isDetailOpen = ref(false)
 const activeTemplate = ref<FriendTemplate | null>(null)
 const tagOptions = ref<string[]>([])
 const tagsSeeded = ref(false)
-const isNoticeOpen = ref(false)
+const isWizardOpen = ref(false)
 const isCloning = ref(false)
 
 const friendStore = useFriendStore()
@@ -186,7 +187,7 @@ onMounted(() => {
         </div>
         <h3>暂无匹配的好友</h3>
         <p>可以尝试调整关键词，或创建你的专属 AI 伙伴。</p>
-        <Button class="empty-action" @click="isNoticeOpen = true">
+        <Button class="empty-action" @click="isWizardOpen = true">
           <Plus :size="16" class="mr-2" />
           AI 创建
         </Button>
@@ -262,19 +263,7 @@ onMounted(() => {
       </DialogContent>
     </Dialog>
 
-    <Dialog v-model:open="isNoticeOpen">
-      <DialogContent class="sm:max-w-[360px]">
-        <DialogHeader>
-          <DialogTitle>功能开发中</DialogTitle>
-        </DialogHeader>
-        <div class="text-sm text-gray-600">
-          添加好友与 AI 创建将在下一阶段开放。
-        </div>
-        <DialogFooter>
-          <Button @click="isNoticeOpen = false">知道了</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AssistantWizard v-model:open="isWizardOpen" @success="emit('back-chat')" />
   </div>
 </template>
 

@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 from app.api import deps
 from app.schemas import friend as friend_schemas
 from app.schemas import friend_template as friend_template_schemas
+from app.schemas import persona_generator as persona_schemas
 from app.services import friend_template_service
+from app.services.persona_generator_service import persona_generator_service
 
 router = APIRouter()
 
@@ -47,3 +49,15 @@ def create_friend_from_template(
     payload: friend_template_schemas.FriendTemplateCreateFriend,
 ):
     return friend_template_service.create_friend_from_payload(db, payload)
+
+
+@router.post("/generate", response_model=persona_schemas.PersonaGenerateResponse)
+async def generate_persona(
+    *,
+    db: Session = Depends(deps.get_db),
+    payload: persona_schemas.PersonaGenerateRequest,
+):
+    """
+    根据描述自动生成 Persona 设定
+    """
+    return await persona_generator_service.generate_persona(db, payload)

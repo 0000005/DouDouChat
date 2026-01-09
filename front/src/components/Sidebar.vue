@@ -11,6 +11,7 @@ import {
   UserPlus,
   Pencil,
   LayoutGrid,
+  Sparkles,
 } from 'lucide-vue-next'
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import AssistantWizard from './AssistantWizard.vue'
 
 const emit = defineEmits<{
   (e: 'open-gallery'): void
@@ -79,6 +81,8 @@ const filteredFriends = computed(() => {
 const onSelectFriend = (friendId: number) => {
   sessionStore.selectFriend(friendId)
 }
+
+const isWizardOpen = ref(false)
 
 // Add Friend Dialog Logic
 const isAddFriendOpen = ref(false)
@@ -223,6 +227,10 @@ onMounted(async () => {
             <Pencil class="mr-2 h-4 w-4" />
             手动创建
           </DropdownMenuItem>
+          <DropdownMenuItem @click="isWizardOpen = true" class="cursor-pointer">
+            <Sparkles class="mr-2 h-4 w-4 text-green-600" />
+            自动创建
+          </DropdownMenuItem>
           <DropdownMenuItem @click="emit('open-gallery')" class="cursor-pointer">
             <LayoutGrid class="mr-2 h-4 w-4" />
             好友库
@@ -344,6 +352,9 @@ onMounted(async () => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- Assistant Wizard -->
+    <AssistantWizard v-model:open="isWizardOpen" />
 
     <!-- Edit Friend Dialog -->
     <Dialog v-model:open="isEditFriendOpen">

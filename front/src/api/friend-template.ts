@@ -46,3 +46,57 @@ export async function cloneFriendTemplate(id: number): Promise<Friend> {
   }
   return response.json()
 }
+
+export interface PersonaGenerateRequest {
+  description: string
+  name?: string
+}
+
+export interface PersonaGenerateResponse {
+  name: string
+  description: string
+  system_prompt: string
+  initial_message: string
+}
+
+export interface FriendTemplateCreateFriend {
+  name: string
+  avatar?: string | null
+  description: string
+  system_prompt: string
+  initial_message?: string | null
+}
+
+/**
+ * 根据描述自动生成 Persona 设定
+ */
+export async function generatePersona(payload: PersonaGenerateRequest): Promise<PersonaGenerateResponse> {
+  const url = withApiBase('/api/friend-templates/generate')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to generate persona' }))
+    throw new Error(error.detail || 'Failed to generate persona')
+  }
+  return response.json()
+}
+
+/**
+ * 根据生成的设定直接创建好友
+ */
+export async function createFriendFromPayload(payload: FriendTemplateCreateFriend): Promise<Friend> {
+  const url = withApiBase('/api/friend-templates/create-friend')
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to create friend' }))
+    throw new Error(error.detail || 'Failed to create friend')
+  }
+  return response.json()
+}
