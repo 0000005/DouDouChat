@@ -254,6 +254,9 @@ Electron wrapper for packaging the app as a standalone desktop application.
     *   配色方案（如微信绿、浅灰色渐变背景等）。
     *   布局（侧边栏、对话列表、聊天窗口的排布）。
     *   交互细节（点击反馈、对话气泡样式等）。
+*   **Prompt Management (LLM Prompts):**
+    *   **禁止硬编码：** 所有用于 LLM 调用的 Prompt 文本**必须**维护在 `server/app/prompt/` 目录下的独立文件中，**严禁**在代码中硬编码 Prompt 字符串。
+    *   **加载方式：** 使用 `server/app/prompt/loader.py` 中的 `load_prompt(category, name)` 函数加载 Prompt 文件。
 *   **Unit Testing:** Run tests using `server\venv\Scripts\python -m pytest server/tests`.
 *   **Logging:** Backend logs are output to the console and saved to `server/logs/app.log`, with daily rotation and 30-day retention.
 
