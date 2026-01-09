@@ -124,6 +124,7 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `IconSidebar.vue`: Vertical icon menu (WeChat style).
     *   `SettingsDialog.vue`: Management of LLM, Memory, and System settings.
     *   `ProfileDialog.vue`: User profile management.
+    *   `SetupWizard.vue`: First-time configuration onboarding.
     *   `EmojiPicker.vue`: WeChat-style emoji selection.
 *   **`stores/`**: Pinia state management.
     *   `session.ts`: Chat session buffers, SSE event parsing, and message history.
@@ -134,7 +135,7 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `thinkingMode.ts`: Global setting for LLM reasoning display.
 *   **`api/`**: Strongly typed REST & SSE clients.
     *   `base.ts`: Base API configuration and Electron port handling.
-    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`.
+    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`, `health.ts`.
 *   **`composables/`**: Reusable Vue Composition API logic (e.g., `useChat.ts`).
 *   **`lib/`**: Utility functions (e.g., `utils.ts` for Tailwind/CSS classes).
 
@@ -152,7 +153,7 @@ FastAPI backend with a modular service-oriented architecture.
     *   `profile.py` & `friend.py`: User profile and AI persona management.
     *   `settings.py`: System configuration API.
     *   `llm.py` & `embedding.py`: AI model provider management.
-    *   `health.py`: Health check for Electron and load balancers.
+    *   `health.py`: Health check and onboarding status.
 *   **`services/`**: Business logic layer.
     *   `chat_service.py`: LLM orchestration, message persistence, and memory RAG.
     *   `recall_service.py`: Multi-step memory recall and agent orchestration.

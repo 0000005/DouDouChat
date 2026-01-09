@@ -6,13 +6,16 @@ import ChatArea from './components/ChatArea.vue'
 import FriendGallery from './components/FriendGallery.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import ProfileDialog from './components/ProfileDialog.vue'
+import SetupWizard from './components/SetupWizard.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { checkHealth } from '@/api/health'
 
 const isSidebarOpen = ref(true)
 const activeTab = ref<'chat' | 'gallery'>('chat')
 const isSettingsOpen = ref(false)
 const isProfileOpen = ref(false)
+const isSetupWizardOpen = ref(false)
 const settingsStore = useSettingsStore()
 
 const updateActiveTab = (tab: 'chat' | 'gallery') => {
@@ -44,7 +47,22 @@ onMounted(async () => {
 
   // Load chat settings from backend (including enable_thinking)
   await settingsStore.fetchChatSettings()
+
+  // Check if system is configured
+  try {
+    const health = await checkHealth()
+    if (!health.llm_configured || !health.embedding_configured) {
+      isSetupWizardOpen.value = true
+    }
+  } catch (error) {
+    console.error('Failed to check health:', error)
+  }
 })
+
+const handleSetupComplete = () => {
+  isSetupWizardOpen.value = false
+  // Reload settings or friends if needed
+}
 </script>
 
 <template>
@@ -81,6 +99,9 @@ onMounted(async () => {
 
       <!-- Profile Dialog -->
       <ProfileDialog v-model:open="isProfileOpen" />
+
+      <!-- Setup Wizard Onboarding -->
+      <SetupWizard v-model:open="isSetupWizardOpen" @complete="handleSetupComplete" />
 
       <!-- Global Toast Container -->
       <ToastContainer />
