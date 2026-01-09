@@ -1,8 +1,10 @@
 import json
 import logging
+import re
 from typing import Optional
 
 from agents import Agent, Runner, set_default_openai_api, set_default_openai_client
+from fastapi import HTTPException
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,7 @@ from app.prompt import get_prompt
 from app.schemas.persona_generator import PersonaGenerateRequest, PersonaGenerateResponse
 
 logger = logging.getLogger(__name__)
+
 
 class PersonaGeneratorService:
     @staticmethod
@@ -26,9 +29,10 @@ class PersonaGeneratorService:
             .first()
         )
         if not llm_config:
-            # 兜底：如果数据库里没有配置，可能需要抛异常或使用默认 Mock 数据
-            logger.warning("LLM configuration not found. Returning mock data.")
-            return PersonaGeneratorService._get_mock_persona(request)
+            raise HTTPException(
+                status_code=500,
+                detail="LLM configuration not found. Please configure LLM settings first."
+            )
 
         # 2. 设置 OpenAI 客户端
         client = AsyncOpenAI(
@@ -50,44 +54,81 @@ class PersonaGeneratorService:
         # 4. 准备输入
         user_input = f"请为我生成一个角色。用户描述：{request.description}"
         if request.name:
-            user_input += f"\n建议姓名：{request.name}"
+            user_input += f"\n姓名：{request.name}"
 
+        # 5. 运行 Agent
         try:
-            # 5. 运行 Agent
             result = await Runner.run(agent, user_input)
-            
-            # 6. 解析结果
-            # 尝试从 final_output 中解析 JSON
-            content = result.final_output
-            # 处理可能的 Markdown 代码块
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            
-            data = json.loads(content)
-            
-            return PersonaGenerateResponse(
-                name=data.get("name", request.name or "未知角色"),
-                description=data.get("description", ""),
-                system_prompt=data.get("system_prompt", ""),
-                initial_message=data.get("initial_message", "你好！")
-            )
         except Exception as e:
-            logger.error(f"Failed to generate persona via LLM: {e}")
-            return PersonaGeneratorService._get_mock_persona(request)
+            logger.error(f"LLM call failed: {e}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"LLM call failed: {str(e)}"
+            )
+        
+        # 6. 解析结果
+        content = result.final_output
+        if not content:
+            raise HTTPException(
+                status_code=502,
+                detail="LLM returned empty response."
+            )
+        
+        # 尝试解析 JSON
+        parsed = PersonaGeneratorService._parse_llm_json(content)
+        if not parsed:
+            # 解析失败，记录原始响应到日志
+            logger.error(f"Failed to parse LLM JSON response. Raw output:\n{content}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to parse LLM response as JSON. Check server logs for raw output."
+            )
+        
+        return PersonaGenerateResponse(
+            name=parsed.get("name", request.name or "未知角色"),
+            description=parsed.get("description", ""),
+            system_prompt=parsed.get("system_prompt", ""),
+            initial_message=parsed.get("initial_message", "你好！")
+        )
 
     @staticmethod
-    def _get_mock_persona(request: PersonaGenerateRequest) -> PersonaGenerateResponse:
+    def _parse_llm_json(content: str) -> Optional[dict]:
         """
-        Mock 实现：在 LLM 不可用时提供兜底数据。
+        尝试从 LLM 输出中解析 JSON。
+        支持以下格式：
+        1. 纯 JSON
+        2. Markdown 代码块包裹的 JSON (```json ... ```)
+        3. 普通代码块包裹的 JSON (``` ... ```)
         """
-        name = request.name or request.description[:10]
-        return PersonaGenerateResponse(
-            name=name,
-            description=f"关于 {name} 的描述",
-            system_prompt=f"你现在扮演 {name}。你的描述是：{request.description}。",
-            initial_message=f"你好，我是{name}，很高兴见到你！"
-        )
+        if not content:
+            return None
+        
+        # 清理内容
+        content = content.strip()
+        
+        # 尝试直接解析
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+        
+        # 尝试提取 Markdown JSON 代码块
+        json_patterns = [
+            r'```json\s*([\s\S]*?)\s*```',  # ```json ... ```
+            r'```\s*([\s\S]*?)\s*```',       # ``` ... ```
+            r'\{[\s\S]*\}',                   # 直接匹配 {...}
+        ]
+        
+        for pattern in json_patterns:
+            match = re.search(pattern, content)
+            if match:
+                json_str = match.group(1) if '```' in pattern else match.group(0)
+                try:
+                    return json.loads(json_str.strip())
+                except json.JSONDecodeError:
+                    continue
+        
+        return None
+
 
 persona_generator_service = PersonaGeneratorService()
