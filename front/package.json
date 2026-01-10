@@ -1,7 +1,7 @@
 {
   "name": "doudou-chat-front",
   "version": "0.1.0",
-  "description": "豆豆聊天 - AI 角色扮演聊天应用前端",
+  "description": "WeAgentChat-唯信",
   "type": "module",
   "scripts": {
     "dev": "vite",
