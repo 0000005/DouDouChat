@@ -8,6 +8,8 @@ import SettingsDialog from './components/SettingsDialog.vue'
 import ProfileDialog from './components/ProfileDialog.vue'
 import SetupWizard from './components/SetupWizard.vue'
 import ToastContainer from './components/ToastContainer.vue'
+import WindowControls from './components/WindowControls.vue'
+import ChatDrawerMenu from './components/ChatDrawerMenu.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { checkHealth } from '@/api/health'
 
@@ -16,6 +18,7 @@ const activeTab = ref<'chat' | 'gallery'>('chat')
 const isSettingsOpen = ref(false)
 const isProfileOpen = ref(false)
 const isSetupWizardOpen = ref(false)
+const isDrawerOpen = ref(false)
 const settingsStore = useSettingsStore()
 
 const updateActiveTab = (tab: 'chat' | 'gallery') => {
@@ -67,6 +70,28 @@ const handleSetupComplete = () => {
 
 <template>
   <div class="wechat-shell">
+    <!-- 
+      ============================================================
+      全局窗口控制组件 (Global Window Controls)
+      ============================================================
+      此组件仅在 Electron 桌面模式下渲染 (由 WindowControls 内部判断 isElectron)。
+      
+      【关于 "更多" 按钮的显示逻辑】
+      - Electron 模式: "更多"按钮集成在这里的 WindowControls 中，与最小化/最大化/关闭按钮同一行。
+      - Web 浏览器模式: WindowControls 不渲染，"更多"按钮回退到 ChatArea.vue 的 Header 中显示。
+      
+      这样设计是为了:
+      1. Electron 模式下保持标题栏按钮的完美对齐
+      2. Web 开发模式下保留完整的菜单访问功能
+      
+      注意: 这不是重复代码，而是针对不同运行环境的适配逻辑。
+    -->
+    <WindowControls 
+      class="global-window-controls" 
+      :show-more="activeTab === 'chat'" 
+      @more-click="isDrawerOpen = true"
+    />
+    
     <div class="wechat-app">
       <!-- Icon Sidebar (always visible on desktop) -->
       <div class="icon-sidebar-container">
@@ -103,6 +128,9 @@ const handleSetupComplete = () => {
       <!-- Setup Wizard Onboarding -->
       <SetupWizard v-model:open="isSetupWizardOpen" @complete="handleSetupComplete" />
 
+      <!-- Global Chat Drawer -->
+      <ChatDrawerMenu v-model:open="isDrawerOpen" />
+
       <!-- Global Toast Container -->
       <ToastContainer />
     </div>
@@ -119,6 +147,16 @@ const handleSetupComplete = () => {
   overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #f5f5f5;
+  position: relative;
+}
+
+/* Global Window Controls - Fixed Position */
+.global-window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 9999;
+  background: transparent;
 }
 
 .wechat-app {

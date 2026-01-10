@@ -28,9 +28,9 @@ import {
   ToolContent,
   ToolOutput
 } from '@/components/ai-elements/tool'
-import ChatDrawerMenu from '@/components/ChatDrawerMenu.vue'
 import { useChat } from '@/composables/useChat'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import ChatDrawerMenu from '@/components/ChatDrawerMenu.vue'
 
 const props = defineProps({
   isSidebarCollapsed: {
@@ -46,9 +46,6 @@ const { messages, input, status, isThinkingMode, toggleThinkingMode, handleSubmi
 const sessionStore = useSessionStore()
 const friendStore = useFriendStore()
 const settingsStore = useSettingsStore()
-const isElectron = Boolean(window.WeAgentChat?.windowControls)
-const isMaximized = ref(false)
-let unsubscribeWindowState: (() => void) | null = null
 
 // System settings for display
 const { showThinking: sysShowThinking, showToolCalls: sysShowToolCalls } = storeToRefs(settingsStore)
@@ -145,36 +142,34 @@ const handleNewChat = async () => {
   // but usually new messages trigger scroll.
 }
 
-// Drawer Menu State
-const drawerOpen = ref(false)
-
-const handleOpenDrawer = () => {
-  drawerOpen.value = true
-}
-
-const updateWindowState = (state: { isMaximized: boolean }) => {
-  isMaximized.value = state.isMaximized
-}
-
-const handleMinimize = () => {
-  if (!isElectron) return
-  window.WeAgentChat?.windowControls?.minimize()
-}
+/**
+ * ============================================================
+ * Electron 模式检测与 Web 模式回退逻辑
+ * ============================================================
+ * 
+ * isElectron: 检测当前是否运行在 Electron 桌面环境中
+ * 
+ * 【"更多"按钮的双模式设计】
+ * - Electron 模式 (isElectron = true):
+ *   "更多"按钮在 App.vue 的 WindowControls 组件中渲染，
+ *   与窗口控制按钮(最小化/最大化/关闭)在同一行，保持完美对齐。
+ *   此处不渲染 "更多" 按钮，避免重复。
+ * 
+ * - Web 浏览器模式 (isElectron = false):
+ *   WindowControls 组件不渲染，"更多"按钮回退到此处的 Header 中显示，
+ *   确保开发者在 `npm run dev` 时仍能访问菜单功能。
+ * 
+ * 这不是重复代码，而是针对不同运行环境的适配逻辑。
+ */
+const isElectron = Boolean(window.WeAgentChat?.windowControls)
 
 const handleToggleMaximize = () => {
   if (!isElectron) return
   window.WeAgentChat?.windowControls?.toggleMaximize()
 }
 
-const handleCloseWindow = () => {
-  if (!isElectron) return
-  window.WeAgentChat?.windowControls?.close()
-}
-
 const handleHeaderContextMenu = (event: MouseEvent) => {
   if (!isElectron) return
-  const target = event.target as HTMLElement | null
-  if (target?.closest('button')) return
   event.preventDefault()
   window.WeAgentChat?.windowControls?.showSystemMenu({
     x: event.screenX,
@@ -182,22 +177,12 @@ const handleHeaderContextMenu = (event: MouseEvent) => {
   })
 }
 
-onMounted(async () => {
-  if (!isElectron) return
-  const controls = window.WeAgentChat?.windowControls
-  if (!controls) return
-  try {
-    const state = await controls.getState()
-    updateWindowState(state)
-  } catch {
-    // ignore state sync errors
-  }
-  unsubscribeWindowState = controls.onState(updateWindowState)
-})
+// Drawer 菜单状态 (仅 Web 模式使用，Electron 模式由 App.vue 管理)
+const drawerOpen = ref(false)
 
-onBeforeUnmount(() => {
-  if (unsubscribeWindowState) unsubscribeWindowState()
-})
+const handleOpenDrawer = () => {
+  drawerOpen.value = true
+}
 
 const formatToolArgs = (args: any) => {
   if (!args) return ''
@@ -215,7 +200,7 @@ const formatToolArgs = (args: any) => {
 <template>
   <div class="wechat-chat-area">
     <!-- Header -->
-    <header class="chat-header" @contextmenu="handleHeaderContextMenu">
+    <header class="chat-header" :class="{ 'electron-mode': isElectron }" @contextmenu="handleHeaderContextMenu">
       <button v-if="isSidebarCollapsed" @click="emit('toggle-sidebar')" class="mobile-menu-btn">
         <Menu :size="20" />
       </button>
@@ -223,30 +208,15 @@ const formatToolArgs = (args: any) => {
         <h2 class="chat-title">{{ currentFriendName }}</h2>
       </div>
       <div class="header-actions">
-        <button class="more-btn" @click="handleOpenDrawer">
+        <!-- 
+          "更多"按钮 - Web 模式回退
+          仅在 Web 浏览器模式下显示 (v-if="!isElectron")
+          Electron 模式下此按钮在 App.vue 的 WindowControls 中渲染
+          详见上方 script 中的注释说明
+        -->
+        <button v-if="!isElectron" class="more-btn" @click="handleOpenDrawer">
           <MoreHorizontal :size="20" />
         </button>
-        <div v-if="isElectron" class="window-controls">
-          <button class="window-btn" title="最小化" @click="handleMinimize">
-            <svg class="window-icon" viewBox="0 0 10 10" aria-hidden="true">
-              <rect x="1" y="5" width="8" height="1.2" />
-            </svg>
-          </button>
-          <button class="window-btn" title="最大化/还原" @click="handleToggleMaximize">
-            <svg v-if="!isMaximized" class="window-icon" viewBox="0 0 10 10" aria-hidden="true">
-              <rect x="1.5" y="1.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1" />
-            </svg>
-            <svg v-else class="window-icon" viewBox="0 0 10 10" aria-hidden="true">
-              <rect x="2" y="3" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1" />
-              <rect x="1" y="1" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1" />
-            </svg>
-          </button>
-          <button class="window-btn close" title="关闭" @click="handleCloseWindow">
-            <svg class="window-icon" viewBox="0 0 10 10" aria-hidden="true">
-              <path d="M2 2 L8 8 M8 2 L2 8" stroke="currentColor" stroke-width="1.2" fill="none" />
-            </svg>
-          </button>
-        </div>
       </div>
     </header>
 
@@ -372,8 +342,12 @@ const formatToolArgs = (args: any) => {
       </div>
     </Transition>
 
-    <!-- Drawer Menu -->
-    <ChatDrawerMenu v-model:open="drawerOpen" />
+    <!-- 
+      Drawer 菜单组件 - Web 模式回退
+      仅在 Web 浏览器模式下渲染 (v-if="!isElectron")
+      Electron 模式下由 App.vue 中的 ChatDrawerMenu 处理
+    -->
+    <ChatDrawerMenu v-if="!isElectron" v-model:open="drawerOpen" />
   </div>
 </template>
 
@@ -391,10 +365,15 @@ const formatToolArgs = (args: any) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 16px; /* Default padding for web mode */
   background: #f5f5f5;
   border-bottom: 1px solid #e5e5e5;
   user-select: none;
+}
+
+/* Extra padding for Electron mode to accommodate window controls */
+.chat-header.electron-mode {
+  padding: 0 170px 0 16px;
 }
 
 .mobile-menu-btn {
@@ -445,39 +424,6 @@ const formatToolArgs = (args: any) => {
 
 .more-btn:hover {
   background: #e5e5e5;
-}
-
-.window-controls {
-  display: flex;
-  align-items: center;
-  margin-left: 6px;
-  -webkit-app-region: no-drag;
-}
-
-.window-btn {
-  width: 38px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: #555;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.window-btn:hover {
-  background: #e5e5e5;
-}
-
-.window-btn.close:hover {
-  background: #e81123;
-  color: #fff;
-}
-
-.window-icon {
-  width: 12px;
-  height: 12px;
 }
 
 /* Empty State */

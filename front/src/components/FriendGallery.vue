@@ -26,6 +26,22 @@ const emit = defineEmits<{
   (e: 'back-chat'): void
 }>()
 
+const isElectron = Boolean(window.WeAgentChat?.windowControls)
+
+const handleToggleMaximize = () => {
+  if (!isElectron) return
+  window.WeAgentChat?.windowControls?.toggleMaximize()
+}
+
+const handleHeaderContextMenu = (event: MouseEvent) => {
+  if (!isElectron) return
+  event.preventDefault()
+  window.WeAgentChat?.windowControls?.showSystemMenu({
+    x: event.screenX,
+    y: event.screenY,
+  })
+}
+
 const templates = ref<FriendTemplate[]>([])
 const isLoading = ref(false)
 const selectedTag = ref('全部')
@@ -132,7 +148,7 @@ onMounted(() => {
 
 <template>
   <div class="friend-gallery">
-    <header class="gallery-header">
+    <header class="gallery-header" @dblclick="handleToggleMaximize" @contextmenu="handleHeaderContextMenu">
       <div class="gallery-title">
         <button class="back-btn" @click="emit('back-chat')">返回</button>
         <LayoutGrid :size="18" />
@@ -277,9 +293,10 @@ onMounted(() => {
 }
 
 .gallery-header {
-  padding: 20px 24px 12px;
+  padding: 20px 130px 12px 24px; /* Right padding for global window controls */
   border-bottom: 1px solid #e3e3e3;
   background: #fdfdfd;
+  -webkit-app-region: drag; /* Make header draggable */
 }
 
 .gallery-title {
@@ -292,6 +309,7 @@ onMounted(() => {
 }
 
 .back-btn {
+  -webkit-app-region: no-drag;
   display: none;
   background: transparent;
   border: none;

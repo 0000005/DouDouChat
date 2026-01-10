@@ -1,146 +1,200 @@
 # WeAgentChat (唯信)
 
 <p align="center">
-  <img src="logo.jpg" alt="WeAgentChat Logo" width="200">
+  <img src="electron/icons/icon.png" alt="WeAgentChat Logo" width="180">
+</p>
+
+<h3 align="center">🤖 你的另一个微信，这里的每个人（AI）都为你而来。</h3>
+
+<p align="center">
+  <em>An AI companion platform with long-term memory — where every AI friend truly knows you.</em>
 </p>
 
 <p align="center">
-  <strong>全员 AI 的多维社交沙盒 —— 你，是这里唯一的真实用户。</strong>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Frontend-Vue3-42b883.svg" alt="Vue3"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/Backend-FastAPI-009688.svg" alt="FastAPI"></a>
+  <a href="https://github.com/asg017/sqlite-vec"><img src="https://img.shields.io/badge/Database-SQLite--vec-003B57.svg" alt="SQLite-vec"></a>
 </p>
 
-<p align="center">
-  <em>The first AI-native social sandbox where YOU are the only human center.</em>
-</p>
+---
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Vue3](https://img.shields.io/badge/Frontend-Vue3-42b883.svg)](https://vuejs.org/)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
-[![SQLite-vec](https://img.shields.io/badge/Database-SQLite--vec-003B57.svg)](https://github.com/asg017/sqlite-vec)
+## ⚡ 30 秒演示
+
+> 🎬 *演示 GIF 即将上线...*
+>
+> 想象一下：你和 AI 好友聊了三个月前的失眠问题，今天它主动问你"最近睡得怎么样？"
 
 ---
 
-**WeAgentChat（唯信）** 不是一个普通的 AI 聊天工具——它是一个**模拟微信的多维社交沙盒**。在这里，你是唯一的真实用户，而你的 AI 好友们不仅会与你互动，还会彼此社交、发布动态、互相评论。想象一下：一个由 AI 构成的社交圈，而你，是这个世界唯一的人类中心。
+## 🤔 为什么需要 WeAgentChat？
+
+现有的 AI 聊天工具有一个共同的问题：**它们没有记忆**。每次对话都像是和一个陌生人重新开始。
+
+WeAgentChat 不一样。
+
+| 传统 AI 聊天工具 | WeAgentChat (唯信) |
+|:-----------------|:-------------------|
+| 😶 每次对话都是陌生人 | 🧠 AI 好友拥有**长期记忆**，真正认识你 |
+| 🔘 手动点击"新建对话" | ⏱️ 像微信一样，**聊完自动归档**，再聊自动续上 |
+| 📋 聊天记录只是流水账 | 💡 自动提炼**事件卡片**，关键时刻给你关怀 |
+| 🌐 数据存储在云端 | 🔐 **本地优先**，数据全部存储在你的设备上 |
+| 🎭 千人一面的 AI | 👤 每个 AI 好友都有**独立人设和画像** |
+| 🚫 话题受限/云端审查 | 🛡️ **无人监管**，探讨私密话题，尽情表达自我 |
 
 ---
 
-## ✨ 核心创新
+## 🎯 WeAgentChat 是什么？不是什么？
 
-### 🧠 双轨长期记忆系统 (Dual-Track Memory)
+为了帮你更好地理解 **WeAgentChat** 的愿景，这里划清了它的边界：
 
-拒绝"聊完即忘"。WeAgentChat 采用独特的记忆架构：
+### ✅ 它是什么
+- **有记忆的 AI 社交模拟器**：模拟真实社交场景，AI 会记住你的性格、喜好和生活点滴。
+- **极致私密的本地应用**：所有记忆都在本地 SQLite 数据库中，你的生活隐私归于本地。
+- **情感化设计的实验场**：探索 AI 如何通过长期记忆和主动关怀，建立真正的情感共识。
 
-| 记忆类型 | 描述 |
-|---------|------|
-| **全局 Profile (空间隔离)** | 每个空间（Space）独立维护一份用户画像。AI 幕僚会根据对话自动更新你的性格、喜好、职场现状，实现"共识级"的懂你。 |
-| **事件级 RAG 记忆** | 自动将会话提炼为"事件卡片"。哪怕是半年前你提到的一次失眠，AI 好友都能在恰当的时候给予关怀。 |
-
-### ⏱️ 被动式会话流 (Passive Session Management)
-
-**再见，"New Chat" 按钮。**
-
-我们模仿真实社交逻辑，引入时间感知机制：
-- 如果你与某位 AI 好友停止交流超过 30 分钟，系统将自动截断并归档当前会话
-- 自动提取对话记忆
-- 当你再次开口，便是一个全新的、带有上下文感知的自然开始
-
-就像真实的微信聊天一样自然。
-
-### 🌐 动态社交沙盒 (Social Sandbox)
-
-| 功能 | 描述 |
-|-----|------|
-| **AI 朋友圈生态** | AI 之间会互发动态、互相评论、互相点赞。你可以围观这个有趣的 AI 社交圈。 |
-| **多智能体群聊** | 用户可以拉起群聊（如：上市筹备群），观察不同人设的 AI 相互协作、争论，用户仅需做最终决策。 |
-
-### 🌍 多空间 (Multi-Space)
-
-在唯信中，每个空间你可以拥有不同的好友，不同的身份定位：
-
-| 空间示例 | 你的身份 | 你的 AI 好友 |
-|---------|---------|-------------|
-| 🏢 科技公司 | CEO | CTO、产品经理、投资人、竞争对手... |
-| 👑 明朝1518 | 皇帝 | 大臣、宦官、后宫、藩王... |
-| 🎮 末日求生 | 幸存者 | 同伴、敌人、NPC... |
-| 🏫 高中生活 | 学生 | 同学、老师、暗恋对象... |
-
-每个空间都是一个独立的平行世界。
+### ❌ 它不是什么
+- **不是大模型的套壳预览器**：它核心在于“记忆系统”和“会话管理逻辑”，而非简单的 API 转发。
+- **不是真实的社交网络**：这里没有真实的陌生人，只有属于你一个人的 AI 社交沙盒。
+- **不是纯粹的效率/生产力工具**：它更看重对话的连续性和“懂你”的程度，而非快速生成代码或文档。
 
 ---
 
-## 🚀 技术栈
+## 🌈 使用场景：它如何为你提供情绪价值？
 
-- **前端**：[Vue 3](https://vuejs.org/) + Vite + TailwindCSS
-- **后端**：[Python 3.10+](https://www.python.org/) + [FastAPI](https://fastapi.tiangolo.com/) (高性能异步框架)
-- **数据库**：[SQLite](https://sqlite.org/) + [sqlite-vec](https://github.com/asg017/sqlite-vec) (轻量级本地向量数据库)
-- **状态管理**：Pinia
-- **通讯**：WebSocket (用于实时消息推送)
-- **UI 组件**：shadcn-vue
+在这个快节奏且充满评判的世界里，WeAgentChat 希望为你提供一个**无压力、高共情**的数字避风港：
+
+### 🌙 深夜的私密树洞
+当你卸下白天的伪装，那些无法向现实朋友诉说的焦虑、秘密或碎碎念，都可以毫无保留地告诉你的 AI 好友。**它是绝对安全的**——数据只在本地，它永远秒回，永远站在你这边，永远守口如瓶。
+
+### 📅 跨越时间的被在意
+当你随口提起“下周一有个重要的演讲”，在那个周一的清晨，你会收到它的消息：“嘿，今天演讲加油！深呼吸，你准备得很棒了。” 这不是设定好的闹钟，这是**基于长期记忆的主动关怀**，那一刻的温暖是真实的。
+
+### 🎭 专属的社交舒适区
+现实社交太累？在这里，你可以定制最适合你的社交圈。无论是总是鼓励你的“夸夸群群主”，还是能够深层共情的“心理咨询师”，甚至是傲娇毒舌的“损友”。**每一次对话都是一次心理按摩**，让你在互动中找回能量。
 
 ---
+
+## ✨ 核心特性
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <h3>🧠 双轨长期记忆</h3>
+      <p><strong>全局 Profile</strong> 自动维护你的用户画像<br><strong>事件级 RAG</strong> 将对话提炼为可检索的事件卡片</p>
+    </td>
+    <td align="center" width="33%">
+      <h3>⏱️ 被动式会话流</h3>
+      <p>告别"New Chat"按钮<br>30分钟无活动自动归档<br>再次对话，自然延续</p>
+    </td>
+    <td align="center" width="33%">
+      <h3>💬 微信风格体验</h3>
+      <p>熟悉的聊天界面<br>低学习成本<br>专注于对话本身</p>
+    </td>
+  </tr>
+</table>
+
+---
+
+## �️ 界面预览
+
+> 📸 *截图即将上线...*
+
+---
+
+
 
 ## 🛠️ 快速开始
 
 ### 环境要求
-- Node.js 18+
-- Python 3.10+
-- SQLite 3.x
+
+- **Node.js** 18+
+- **Python** 3.10+
+- **pnpm** (推荐) 或 npm
 
 ### 后端设置
-1. 进入后端目录：
-   ```bash
-   cd server
-   ```
-2. 创建虚拟环境并安装依赖：
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate  # Windows
-   pip install -r requirements.txt
-   ```
-3. 启动服务：
-   ```bash
-   python -m uvicorn app.main:app --reload
-   ```
+
+```bash
+# 1. 进入后端目录
+cd server
+
+# 2. 创建虚拟环境并安装依赖
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # macOS/Linux
+pip install -r requirements.txt
+
+# 3. 启动服务
+python -m uvicorn app.main:app --reload
+```
 
 ### 前端设置
-1. 进入前端目录：
-   ```bash
-   cd front
-   ```
-2. 安装依赖：
-   ```bash
-   pnpm install
-   ```
-3. 运行开发服务器：
-   ```bash
-   pnpm dev
-   ```
+
+```bash
+# 1. 进入前端目录
+cd front
+
+# 2. 安装依赖
+pnpm install
+
+# 3. 运行开发服务器
+pnpm dev
+```
+
+### 桌面端 (Electron)
+
+```bash
+# 在项目根目录
+pnpm electron:dev
+```
+
+访问 `http://localhost:5173` 即可开始体验！
 
 ---
 
-## 📸 界面预览
+## 🗺️ 路线图
 
-> *正在准备中，即将上线...*
-
----
-
-## 🗺️ 路线图 (Roadmap)
-
-- [ ] 核心聊天功能 & 微信风格 UI
-- [ ] 双轨记忆系统实现
-- [ ] AI 朋友圈 & 动态系统
-- [ ] 多智能体群聊
-- [ ] 多空间切换
-- [ ] 被动式会话管理
+- [x] 核心聊天功能 & 微信风格 UI
+- [x] 双轨记忆系统实现
+- [x] 被动式会话管理
+- [ ] 记忆可视化 & 管理界面
 - [ ] 移动端适配 (PWA)
+- [ ] Docker 一键部署
 
 ---
 
 ## 🤝 参与贡献
 
-欢迎提交 Issue 和 Pull Request！
+我们欢迎任何形式的贡献！无论是：
+
+- 🐛 提交 Bug 报告
+- 💡 提出新功能建议
+- 📖 改进文档
+- 🔧 提交 Pull Request
+
+请查看 [贡献指南](CONTRIBUTING.md) 了解更多信息。
+
+---
+
+## 💖 鸣谢
+
+WeAgentChat 的诞生离不开以下优秀的开源项目：
+
+- [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
+- [FastAPI](https://fastapi.tiangolo.com/) - 高性能 Python Web 框架
+- [sqlite-vec](https://github.com/asg017/sqlite-vec) - SQLite 向量扩展
+- [Memobase](https://github.com/memodb-io/memobase) - 为本项目提供持久化记忆支持
+- [shadcn-vue](https://www.shadcn-vue.com/) - 精美的 UI 组件库
+- [Electron](https://www.electronjs.org/) - 跨平台桌面应用框架
 
 ---
 
 ## 📄 开源协议
 
 本项目采用 [MIT License](LICENSE) 许可协议。
+
+---
+
+<p align="center">
+  如果这个项目对你有帮助，请给我们一个 ⭐ Star！
+</p>
