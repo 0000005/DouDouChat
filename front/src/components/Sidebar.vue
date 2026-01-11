@@ -12,9 +12,8 @@ import {
   Pencil,
   LayoutGrid,
   Sparkles,
-  Camera,
 } from 'lucide-vue-next'
-import AvatarUploader from '@/components/common/AvatarUploader.vue'
+import FriendComposeDialog from './FriendComposeDialog.vue'
 import { getStaticUrl } from '@/api/base'
 import {
   DropdownMenu,
@@ -31,8 +30,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import AssistantWizard from './AssistantWizard.vue'
 
 const emit = defineEmits<{
@@ -90,51 +87,15 @@ const onSelectFriend = (friendId: number) => {
 
 const isWizardOpen = ref(false)
 
-// Add Friend Dialog Logic
-const isAddFriendOpen = ref(false)
-const isSubmitting = ref(false)
-const newFriendForm = ref({
-  name: '',
-  description: '',
-  system_prompt: '',
-  avatar: '',
-})
-
-const resetAddFriendForm = () => {
-  newFriendForm.value = {
-    name: '',
-    description: '',
-    system_prompt: '',
-    avatar: '',
-  }
-}
+// Friend Compose Dialog Logic
+const composeDialogOpen = ref(false)
+const composeDialogMode = ref<'add' | 'edit'>('add')
+const composeFriendId = ref<number | null>(null)
 
 const onAddFriend = () => {
-  resetAddFriendForm()
-  isAddFriendOpen.value = true
-}
-
-const confirmAddFriend = async () => {
-  if (!newFriendForm.value.name.trim()) {
-    return
-  }
-  isSubmitting.value = true
-  try {
-    const createdFriend = await friendStore.addFriend({
-      name: newFriendForm.value.name.trim(),
-      description: newFriendForm.value.description.trim() || undefined,
-      system_prompt: newFriendForm.value.system_prompt.trim() || undefined,
-      is_preset: false,
-      avatar: newFriendForm.value.avatar || undefined
-    })
-    isAddFriendOpen.value = false
-    // Select the newly created friend
-    sessionStore.selectFriend(createdFriend.id)
-  } catch (e) {
-    console.error('Failed to add friend:', e)
-  } finally {
-    isSubmitting.value = false
-  }
+  composeDialogMode.value = 'add'
+  composeFriendId.value = null
+  composeDialogOpen.value = true
 }
 
 // Delete Friend Dialog Logic
@@ -162,49 +123,10 @@ const confirmDeleteFriend = async () => {
   friendToDelete.value = null
 }
 
-// Edit Friend Dialog Logic
-const isEditFriendOpen = ref(false)
-const friendToEdit = ref<number | null>(null)
-const editFriendForm = ref({
-  name: '',
-  description: '',
-  system_prompt: '',
-  avatar: '',
-})
-
 const openEditFriendDialog = (id: number) => {
-  const friend = friendStore.getFriend(id)
-  if (friend) {
-    friendToEdit.value = id
-    editFriendForm.value = {
-      name: friend.name,
-      description: friend.description || '',
-      system_prompt: friend.system_prompt || '',
-      avatar: friend.avatar || '',
-    }
-    isEditFriendOpen.value = true
-  }
-}
-
-const confirmEditFriend = async () => {
-  if (!friendToEdit.value || !editFriendForm.value.name.trim()) {
-    return
-  }
-  isSubmitting.value = true
-  try {
-    await friendStore.updateFriend(friendToEdit.value, {
-      name: editFriendForm.value.name.trim(),
-      description: editFriendForm.value.description.trim() || null,
-      system_prompt: editFriendForm.value.system_prompt.trim() || null,
-      avatar: editFriendForm.value.avatar || null,
-    })
-    isEditFriendOpen.value = false
-    friendToEdit.value = null
-  } catch (e) {
-    console.error('Failed to update friend:', e)
-  } finally {
-    isSubmitting.value = false
-  }
+  composeDialogMode.value = 'edit'
+  composeFriendId.value = id
+  composeDialogOpen.value = true
 }
 
 // Initialize: select first friend if none selected
@@ -218,25 +140,6 @@ onMounted(async () => {
     sessionStore.selectFriend(friends.value[0].id)
   }
 })
-
-
-// Avatar Upload Logic
-const isAvatarUploaderOpen = ref(false)
-const uploadingFor = ref<'new' | 'edit'>('new')
-
-const openAvatarUploader = (mode: 'new' | 'edit') => {
-  uploadingFor.value = mode
-  isAvatarUploaderOpen.value = true
-}
-
-const handleAvatarUploaded = (url: string) => {
-  if (uploadingFor.value === 'new') {
-    newFriendForm.value.avatar = url
-  } else {
-    editFriendForm.value.avatar = url
-  }
-}
-
 </script>
 
 <template>
@@ -344,126 +247,18 @@ const handleAvatarUploaded = (url: string) => {
       </DialogContent>
     </Dialog>
 
-    <!-- Add Friend Dialog -->
-    <Dialog v-model:open="isAddFriendOpen">
-      <DialogContent class="sm:max-w-[500px] add-friend-dialog">
-        <DialogHeader>
-          <DialogTitle>新增好友</DialogTitle>
-          <DialogDescription>
-            创建一个新的 AI 好友，设置其名称和人格特征。
-          </DialogDescription>
-        </DialogHeader>
 
-        <!-- Avatar Upload Section -->
-        <div class="flex flex-col items-center py-4 shrink-0">
-            <div class="relative group cursor-pointer" @click="openAvatarUploader('new')">
-                <div class="w-20 h-20 rounded-lg border border-gray-200 shadow-sm bg-gray-50 flex items-center justify-center overflow-hidden">
-                    <img v-if="newFriendForm.avatar" :src="getStaticUrl(newFriendForm.avatar)" class="w-full h-full object-cover" />
-                    <UserPlus v-else class="text-gray-300 w-8 h-8" />
-                </div>
-                <div class="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[1px]">
-                    <Camera class="text-white w-6 h-6" stroke-width="1.5" />
-                </div>
-            </div>
-            <div class="mt-2 text-xs text-gray-500">点击设置头像</div>
-        </div>
-
-        <div class="dialog-form">
-          <div class="form-group">
-            <label for="friend-name" class="form-label">好友名称 <span class="required">*</span></label>
-            <Input id="friend-name" v-model="newFriendForm.name" placeholder="请输入好友名称，如：小助手、知心姐姐" class="form-input" />
-          </div>
-
-          <div class="form-group">
-            <label for="friend-description" class="form-label">好友描述</label>
-            <Input id="friend-description" v-model="newFriendForm.description" placeholder="简短描述这个好友的特点"
-              class="form-input" />
-          </div>
-
-          <div class="form-group">
-            <label for="friend-system-prompt" class="form-label">系统提示词</label>
-            <Textarea id="friend-system-prompt" v-model="newFriendForm.system_prompt"
-              placeholder="设置这个好友的人格特征和行为准则，例如：你是一个温暖友善的朋友，喜欢倾听和给出建设性意见..." class="form-textarea" :rows="5" />
-            <p class="form-hint">系统提示词决定了 AI 好友的人格和回复风格</p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" @click="isAddFriendOpen = false" :disabled="isSubmitting">取消</Button>
-          <Button @click="confirmAddFriend" :disabled="!newFriendForm.name.trim() || isSubmitting"
-            class="add-confirm-btn">
-            {{ isSubmitting ? '创建中...' : '创建好友' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <!-- Assistant Wizard -->
     <AssistantWizard v-model:open="isWizardOpen" />
 
-    <!-- Edit Friend Dialog -->
-    <Dialog v-model:open="isEditFriendOpen">
-      <DialogContent class="sm:max-w-[500px] add-friend-dialog">
-        <DialogHeader>
-          <DialogTitle>编辑好友</DialogTitle>
-          <DialogDescription>
-            修改 AI 好友的名称和人格特征。
-          </DialogDescription>
-        </DialogHeader>
-
-        <!-- Avatar Upload Section -->
-        <div class="flex flex-col items-center py-4 shrink-0">
-            <div class="relative group cursor-pointer" @click="openAvatarUploader('edit')">
-                <div class="w-20 h-20 rounded-lg border border-gray-200 shadow-sm bg-gray-50 flex items-center justify-center overflow-hidden">
-                    <img v-if="editFriendForm.avatar" :src="getStaticUrl(editFriendForm.avatar)" class="w-full h-full object-cover" />
-                    <UserPlus v-else class="text-gray-300 w-8 h-8" />
-                </div>
-                <div class="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[1px]">
-                    <Camera class="text-white w-6 h-6" stroke-width="1.5" />
-                </div>
-            </div>
-            <div class="mt-2 text-xs text-gray-500">点击更换头像</div>
-        </div>
-
-        <div class="dialog-form">
-          <div class="form-group">
-            <label for="edit-friend-name" class="form-label">好友名称 <span class="required">*</span></label>
-            <Input id="edit-friend-name" v-model="editFriendForm.name" placeholder="请输入好友名称" class="form-input" />
-          </div>
-
-          <div class="form-group">
-            <label for="edit-friend-description" class="form-label">好友描述</label>
-            <Input id="edit-friend-description" v-model="editFriendForm.description" placeholder="简短描述这个好友的特点"
-              class="form-input" />
-          </div>
-
-          <div class="form-group">
-            <label for="edit-friend-system-prompt" class="form-label">系统提示词</label>
-            <Textarea id="edit-friend-system-prompt" v-model="editFriendForm.system_prompt"
-              placeholder="设置这个好友的人格特征和行为准则..." class="form-textarea" :rows="5" />
-            <p class="form-hint">系统提示词决定了 AI 好友的人格和回复风格</p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" @click="isEditFriendOpen = false" :disabled="isSubmitting">取消</Button>
-          <Button @click="confirmEditFriend" :disabled="!editFriendForm.name.trim() || isSubmitting"
-            class="add-confirm-btn">
-            {{ isSubmitting ? '保存中...' : '保存修改' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <!-- Friend Compose Dialog -->
+    <FriendComposeDialog
+      v-model:open="composeDialogOpen"
+      :mode="composeDialogMode"
+      :friend-id="composeFriendId"
+    />
   </aside>
-
-  <!-- Avatar Uploader -->
-  <AvatarUploader 
-      v-if="isAvatarUploaderOpen"
-      :title="uploadingFor === 'new' ? '设置好友头像' : '更换好友头像'"
-      :initial-image="uploadingFor === 'new' ? (newFriendForm.avatar ? getStaticUrl(newFriendForm.avatar) : undefined) : (editFriendForm.avatar ? getStaticUrl(editFriendForm.avatar) : undefined)"
-      @update:image="handleAvatarUploaded"
-      @close="isAvatarUploaderOpen = false"
-  />
 </template>
 
 <style scoped>
@@ -691,56 +486,4 @@ const handleAvatarUploaded = (url: string) => {
   background: #06ad56;
 }
 
-/* Add Friend Dialog Styles */
-.dialog-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 8px 0;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-}
-
-.form-label .required {
-  color: #dc2626;
-}
-
-.form-input {
-  font-size: 14px;
-}
-
-.form-textarea {
-  font-size: 14px;
-  resize: none;
-  min-height: 100px;
-}
-
-.form-hint {
-  font-size: 12px;
-  color: #888;
-  margin: 0;
-}
-
-.add-confirm-btn {
-  background: #07c160;
-}
-
-.add-confirm-btn:hover:not(:disabled) {
-  background: #06ad56;
-}
-
-.add-confirm-btn:disabled {
-  background: #a0a0a0;
-  cursor: not-allowed;
-}
 </style>
