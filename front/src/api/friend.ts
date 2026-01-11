@@ -11,6 +11,7 @@ export interface Friend {
   update_time: string
   pinned_at?: string | null
   deleted: boolean
+  script_expression: boolean
 }
 
 export interface FriendCreate {
@@ -19,6 +20,7 @@ export interface FriendCreate {
   system_prompt?: string | null
   avatar?: string | null
   is_preset?: boolean
+  script_expression?: boolean
 }
 
 export interface FriendUpdate {
@@ -28,6 +30,7 @@ export interface FriendUpdate {
   avatar?: string | null
   is_preset?: boolean | null
   pinned_at?: string | null
+  script_expression?: boolean | null
 }
 
 export async function getFriends(skip: number = 0, limit: number = 100): Promise<Friend[]> {

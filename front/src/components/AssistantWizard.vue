@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader } from '@/components/ai-elements/loader'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { Sparkles, ArrowRight, UserPlus, RefreshCw } from 'lucide-vue-next'
 import {
   generatePersona,
@@ -43,6 +45,7 @@ const isEditingPrompt = ref(false)
 const generatedPersona = ref<PersonaGenerateResponse | null>(null)
 const avatarUrl = ref<string | null>(null)
 const isAvatarUploaderOpen = ref(false)
+const scriptExpression = ref(true)
 
 const canGoToPreview = computed(() => description.value.trim().length > 5)
 
@@ -69,12 +72,13 @@ const handleConfirm = async () => {
 
   isSaving.value = true
   try {
-    const friend = await createFriendFromPayload({
+    const friend = await friendStore.addFriend({
       name: generatedPersona.value.name,
       description: generatedPersona.value.description,
       system_prompt: generatedPersona.value.system_prompt,
-      initial_message: generatedPersona.value.initial_message,
-      avatar: avatarUrl.value
+      avatar: avatarUrl.value || undefined,
+      script_expression: scriptExpression.value,
+      is_preset: false
     })
 
     // 强制同步 Store
@@ -108,6 +112,7 @@ const resetAll = () => {
   description.value = ''
   generatedPersona.value = null
   isEditingPrompt.value = false
+  scriptExpression.value = true
 }
 
 const handleClose = () => {
@@ -148,6 +153,13 @@ const handleClose = () => {
               placeholder="例如：一个学识渊博但幽默的哲学老师，喜欢用反讽的方式引导我思考。说话风格温文尔雅，经常引用古典著作。"
               class="min-h-[140px] resize-none border-gray-200 focus-visible:ring-green-500 leading-relaxed"
             />
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 mt-2">
+              <div class="space-y-0.5">
+                <Label for="script-expression-wizard" class="text-sm font-medium">剧本式表达</Label>
+                <p class="text-[11px] text-gray-500">让 AI 的回复包含动作、神态等环境描写</p>
+              </div>
+              <Switch id="script-expression-wizard" v-model="scriptExpression" />
+            </div>
             <div class="flex justify-between items-center">
               <p class="text-[11px] text-gray-400">描述得越详细，生成的性格越鲜明。</p>
               <p class="text-[11px]" :class="canGoToPreview ? 'text-green-600' : 'text-gray-300'">

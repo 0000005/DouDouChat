@@ -16,6 +16,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 const props = defineProps<{
   open: boolean
@@ -39,6 +41,7 @@ const form = ref({
   description: '',
   system_prompt: '',
   avatar: '',
+  script_expression: true,
 })
 
 const isOpen = computed({
@@ -52,6 +55,7 @@ const resetForm = () => {
     description: '',
     system_prompt: '',
     avatar: '',
+    script_expression: true,
   }
 }
 
@@ -64,6 +68,7 @@ const loadFriendData = () => {
         description: friend.description || '',
         system_prompt: friend.system_prompt || '',
         avatar: friend.avatar || '',
+        script_expression: friend.script_expression ?? true,
       }
     }
   } else {
@@ -98,7 +103,8 @@ const handleConfirm = async () => {
         description: form.value.description.trim() || undefined,
         system_prompt: form.value.system_prompt.trim() || undefined,
         is_preset: false,
-        avatar: form.value.avatar || undefined
+        avatar: form.value.avatar || undefined,
+        script_expression: form.value.script_expression
       })
       emit('success', createdFriend)
       sessionStore.selectFriend(createdFriend.id)
@@ -108,6 +114,7 @@ const handleConfirm = async () => {
         description: form.value.description.trim() || null,
         system_prompt: form.value.system_prompt.trim() || null,
         avatar: form.value.avatar || null,
+        script_expression: form.value.script_expression
       })
       emit('success', updatedFriend)
     }
@@ -162,6 +169,14 @@ const handleConfirm = async () => {
           <Textarea id="friend-system-prompt" v-model="form.system_prompt"
             placeholder="设置这个好友的人格特征和行为准则，例如：你是一个温暖友善的朋友，喜欢倾听和给出建设性意见..." class="form-textarea" :rows="5" />
           <p class="form-hint">系统提示词决定了 AI 好友的人格和回复风格</p>
+        </div>
+
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 mt-2">
+          <div class="space-y-0.5">
+            <Label for="script-expression" class="text-sm font-medium">剧本式表达</Label>
+            <p class="text-[11px] text-gray-500">让 AI 的回复包含动作、神态等环境描写</p>
+          </div>
+          <Switch id="script-expression" v-model="form.script_expression" />
         </div>
       </div>
 

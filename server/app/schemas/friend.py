@@ -8,6 +8,7 @@ class FriendBase(BaseModel):
     system_prompt: Optional[str] = None
     is_preset: bool = Field(False, description="是否为系统预设")
     avatar: Optional[str] = Field(None, description="头像URL")
+    script_expression: bool = Field(True, description="是否启用剧本式表达")
 
 class FriendCreate(FriendBase):
     pass
@@ -18,6 +19,7 @@ class FriendUpdate(BaseModel):
     system_prompt: Optional[str] = None
     is_preset: Optional[bool] = None
     avatar: Optional[str] = Field(None, description="头像URL")
+    script_expression: Optional[bool] = Field(None, description="是否启用剧本式表达")
     pinned_at: Optional[datetime] = None  # Direct update of pinned_at
 
 class Friend(FriendBase):

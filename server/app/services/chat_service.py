@@ -501,9 +501,15 @@ async def send_message(db: Session, session_id: int, message_in: chat_schemas.Me
         return None
 
     friend = db.query(Friend).filter(Friend.id == db_session.friend_id).first()
-    system_prompt = friend.system_prompt if friend else get_prompt(
-        "chat/default_system_prompt.txt"
-    ).strip()
+    system_prompt = friend.system_prompt if friend else get_prompt("chat/default_system_prompt.txt")
+    system_prompt = system_prompt.strip()
+
+    if friend and friend.script_expression:
+        try:
+            script_prompt = get_prompt("persona/script_expression.txt").strip()
+            system_prompt = f"{system_prompt}\n\n{script_prompt}"
+        except Exception as e:
+            logger.error(f"Failed to load script_expression prompt: {e}")
 
     llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
     if not llm_config:
@@ -695,8 +701,17 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
 
     # 3.3 Construct final instructions and messages
     final_instructions = system_prompt
+    
+    # Inject script expression if enabled
+    if friend and friend.script_expression:
+        try:
+            script_prompt = get_prompt("persona/script_expression.txt").strip()
+            final_instructions = f"{final_instructions}\n\n{script_prompt}"
+        except Exception as e:
+            logger.error(f"Failed to load script_expression prompt: {e}")
+
     if profile_data:
-        final_instructions = f"{system_prompt}\n\n[USER PROFILE]\n{profile_data}"
+        final_instructions = f"{final_instructions}\n\n[USER PROFILE]\n{profile_data}"
 
     agent_messages = []
     for m in history:
