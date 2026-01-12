@@ -32,3 +32,4 @@ server/data/*.db
 *.log
 server/logs/app.log.*
 server/logs/prompt.log.*
+/logs/app.log.*

@@ -501,15 +501,30 @@ async def send_message(db: Session, session_id: int, message_in: chat_schemas.Me
         return None
 
     friend = db.query(Friend).filter(Friend.id == db_session.friend_id).first()
-    system_prompt = friend.system_prompt if friend else get_prompt("chat/default_system_prompt.txt")
-    system_prompt = system_prompt.strip()
+    persona_prompt = friend.system_prompt if friend else get_prompt("chat/default_system_prompt.txt")
+    persona_prompt = persona_prompt.strip()
 
+    script_prompt = ""
     if friend and friend.script_expression:
         try:
             script_prompt = get_prompt("persona/script_expression.txt").strip()
-            system_prompt = f"{system_prompt}\n\n{script_prompt}"
         except Exception as e:
             logger.error(f"Failed to load script_expression prompt: {e}")
+
+    try:
+        root_template = get_prompt("chat/root_system_prompt.txt")
+        system_prompt = root_template.replace("{{role-play-prompt}}", persona_prompt)
+        
+        # 动态处理可选部分的间距
+        script_block = f"\n\n{script_prompt}" if script_prompt else ""
+        system_prompt = system_prompt.replace("{{script-expression}}", script_block)
+        system_prompt = system_prompt.replace("{{user-profile}}", "") # send_message does not support profile yet
+    except Exception as e:
+        logger.error(f"Failed to load root_system_prompt template: {e}")
+        system_prompt = persona_prompt
+        if script_prompt:
+            system_prompt = f"{system_prompt}\n\n{script_prompt}"
+        system_prompt = system_prompt.strip()
 
     llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
     if not llm_config:
@@ -612,9 +627,9 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         return
 
     friend = db.query(Friend).filter(Friend.id == db_session.friend_id).first()
-    system_prompt = friend.system_prompt if friend else get_prompt(
+    persona_prompt = (friend.system_prompt if friend else get_prompt(
         "chat/default_system_prompt.txt"
-    ).strip()
+    )).strip()
     friend_name = friend.name if friend else "AI"
 
     llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
@@ -699,19 +714,31 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         except Exception as e:
             logger.error(f"[Recall] Event recall failed: {e}")
 
-    # 3.3 Construct final instructions and messages
-    final_instructions = system_prompt
-    
-    # Inject script expression if enabled
+    # 3.3 Construct final instructions and messages using root template
+    script_prompt = ""
     if friend and friend.script_expression:
         try:
             script_prompt = get_prompt("persona/script_expression.txt").strip()
-            final_instructions = f"{final_instructions}\n\n{script_prompt}"
         except Exception as e:
             logger.error(f"Failed to load script_expression prompt: {e}")
 
-    if profile_data:
-        final_instructions = f"{final_instructions}\n\n[USER PROFILE]\n{profile_data}"
+    try:
+        root_template = get_prompt("chat/root_system_prompt.txt")
+        final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt)
+        
+        # 动态处理可选部分的间距 (Dynamic spacing)
+        script_block = f"\n\n{script_prompt}" if script_prompt else ""
+        final_instructions = final_instructions.replace("{{script-expression}}", script_block)
+        
+        profile_content_block = f"\n\n[USER PROFILE]\n{profile_data}" if profile_data else ""
+        final_instructions = final_instructions.replace("{{user-profile}}", profile_content_block)
+    except Exception as e:
+        logger.error(f"Failed to load root_system_prompt template: {e}")
+        final_instructions = persona_prompt
+        if script_prompt:
+            final_instructions = f"{final_instructions}\n\n{script_prompt}"
+        if profile_data:
+            final_instructions = f"{final_instructions}\n\n[USER PROFILE]\n{profile_data}"
 
     agent_messages = []
     for m in history:
