@@ -1,4 +1,4 @@
-appId: com.doudou.chat
+appId: com.weagent.chat
 productName: WeAgentChat
 files:
   - electron/**/*

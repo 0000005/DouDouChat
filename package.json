@@ -1,5 +1,5 @@
 {
-  "name": "doudou-chat-desktop",
+  "name": "weagentchat",
   "version": "0.1.0",
   "private": true,
   "main": "electron/main.js",

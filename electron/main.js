@@ -18,7 +18,7 @@ const HEALTH_PATH = '/api/health'
 const BACKEND_START_TIMEOUT_MS = 45000
 
 // Ensure Windows shell / shortcuts bind to our app identity for correct icon & notifications
-app.setAppUserModelId('com.doudou.chat')
+app.setAppUserModelId('com.weagent.chat')
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
