@@ -26,6 +26,11 @@ Unlike traditional AI chat tools, WeAgentChat simulates a WeChat-like multi-dime
 
 ## Quick Start
 
+### One-click Start (Development)
+Run in project root:
+`scripts\startAll.bat`
+This script will simultaneously launch the Backend API and Frontend Dev Server.
+
 ### Frontend
 1.  Navigate to `front/`: `cd front`
 2.  Install dependencies: `pnpm install`
@@ -249,7 +254,7 @@ Electron wrapper for packaging the app as a standalone desktop application.
     *   **Database Operations:** 使用 `sqlite3` 命令（已配置全局环境变量）直接操作数据库文件（如 `sqlite3 server/data/doudou.db`）。
     *   **Database Migrations (Alembic):**
         *   **Automatic Update:** The server automatically applies the latest migrations on startup (`init_db.py` calls `alembic upgrade head`).
-        *   **Generate Migration:** Run `gen_migration.bat` in the project root to generate a new migration script after modifying SQLAlchemy models.
+        *   **Generate Migration:** Run `scripts\gen_migration.bat` in the project root to generate a new migration script after modifying SQLAlchemy models.
         *   **Manual Operations:** See `server/ALEMBIC_SETUP.md` for detailed Alembic commands.
     *   **UI Design:** **所有的 UI 界面必须高度参考微信 (WeChat) 的视觉风格和交互体验。** 这包括但不限于：
     *   配色方案（如微信绿、浅灰色渐变背景等）。

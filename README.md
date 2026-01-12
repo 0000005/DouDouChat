@@ -166,7 +166,7 @@ graph TD
 #### 一键启动
 在项目根目录运行：
 ```powershell
-.\startAll.bat
+.\scripts\startAll.bat
 ```
 该脚本将同时启动后端 API 和前端开发服务器。
 

@@ -16,11 +16,11 @@ echo [INFO] Starting WeAgentChat...
 
 :: Start Backend
 echo Starting Backend...
-start "WeAgentChat Backend" cmd /k "cd server && venv\Scripts\python -m uvicorn app.main:app --reload --port 8000"
+start "WeAgentChat Backend" cmd /k "cd ..\server && venv\Scripts\python -m uvicorn app.main:app --reload --port 8000"
 
 :: Start Frontend
 echo Starting Frontend...
-start "WeAgentChat Frontend" cmd /k "cd front && pnpm dev"
+start "WeAgentChat Frontend" cmd /k "cd ..\front && pnpm dev"
 
 echo.
 echo ==========================================================

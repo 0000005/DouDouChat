@@ -1,7 +1,7 @@
 @echo off
 SETLOCAL
 set BASE_DIR=%~dp0
-cd /d %BASE_DIR%server
+cd /d %BASE_DIR%..\server
 
 echo ========================================
 echo   WeAgentChat 数据库迁移生成工具
