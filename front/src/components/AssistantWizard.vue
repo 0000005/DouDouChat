@@ -144,15 +144,13 @@ const handleClose = () => {
         <div v-if="step === 1 && !isGenerating" class="space-y-5 py-2">
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">她/他叫什么名字？（可选）</label>
-            <Input v-model="name" placeholder="例如：苏格拉底、隔壁王阿姨..." class="h-10 border-gray-200 focus-visible:ring-green-500" />
+            <Input v-model="name" placeholder="例如：苏格拉底、隔壁王阿姨..."
+              class="h-10 border-gray-200 focus-visible:ring-green-500" />
           </div>
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">性格与背景描述</label>
-            <Textarea
-              v-model="description"
-              placeholder="例如：一个学识渊博但幽默的哲学老师，喜欢用反讽的方式引导我思考。说话风格温文尔雅，经常引用古典著作。"
-              class="min-h-[140px] resize-none border-gray-200 focus-visible:ring-green-500 leading-relaxed"
-            />
+            <Textarea v-model="description" placeholder="例如：一个学识渊博但幽默的哲学老师，喜欢用反讽的方式引导我思考。说话风格温文尔雅，经常引用古典著作。"
+              class="min-h-[140px] resize-none border-gray-200 focus-visible:ring-green-500 leading-relaxed" />
             <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 mt-2">
               <div class="space-y-0.5">
                 <Label for="script-expression-wizard" class="text-sm font-medium">剧本式表达</Label>
@@ -177,26 +175,25 @@ const handleClose = () => {
           </div>
           <div class="text-center">
             <p class="text-base font-semibold text-green-700">正在构思人格魅力...</p>
-            <p class="text-xs text-gray-400 mt-1">这可能需要几秒钟时间</p>
+            <p class="text-xs text-gray-400 mt-1">这可能需要1分钟左右的时间</p>
           </div>
         </div>
 
         <!-- Step 2: Result Preview -->
-        <div
-          v-if="step === 2 && !isGenerating && generatedPersona"
-          class="space-y-4 max-h-[440px] overflow-y-auto pr-2 py-2"
-        >
-          <div class="border rounded-xl p-5 bg-gradient-to-br from-green-50/50 to-white space-y-5 border-green-100/50 shadow-sm">
+        <div v-if="step === 2 && !isGenerating && generatedPersona"
+          class="space-y-4 max-h-[440px] overflow-y-auto pr-2 py-2">
+          <div
+            class="border rounded-xl p-5 bg-gradient-to-br from-green-50/50 to-white space-y-5 border-green-100/50 shadow-sm">
             <div class="flex items-center gap-4">
               <div
                 class="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-2xl shadow-md shadow-green-200 cursor-pointer relative group overflow-hidden"
-                @click="isAvatarUploaderOpen = true"
-              >
+                @click="isAvatarUploaderOpen = true">
                 <img v-if="avatarUrl" :src="avatarUrl" class="w-full h-full object-cover" />
                 <span v-else>{{ generatedPersona.name.charAt(0) }}</span>
-                
-                <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Camera class="text-white w-5 h-5" />
+
+                <div
+                  class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Camera class="text-white w-5 h-5" />
                 </div>
               </div>
               <div class="min-w-0">
@@ -215,31 +212,19 @@ const handleClose = () => {
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <h4 class="text-[10px] font-bold text-green-600 uppercase tracking-wider">人格设定 (System Prompt)</h4>
-                <button
-                  v-if="!isEditingPrompt"
-                  @click="isEditingPrompt = true"
-                  class="text-[10px] text-green-600 hover:text-green-700 hover:underline"
-                >
+                <button v-if="!isEditingPrompt" @click="isEditingPrompt = true"
+                  class="text-[10px] text-green-600 hover:text-green-700 hover:underline">
                   点击编辑
                 </button>
-                <button
-                  v-else
-                  @click="isEditingPrompt = false"
-                  class="text-[10px] text-gray-500 hover:text-gray-600 hover:underline"
-                >
+                <button v-else @click="isEditingPrompt = false"
+                  class="text-[10px] text-gray-500 hover:text-gray-600 hover:underline">
                   完成编辑
                 </button>
               </div>
-              <Textarea
-                v-if="isEditingPrompt"
-                v-model="generatedPersona.system_prompt"
-                class="min-h-[160px] text-xs text-gray-600 leading-relaxed resize-none border-green-200 focus-visible:ring-green-500 bg-white"
-              />
-              <div
-                v-else
-                @click="isEditingPrompt = true"
-                class="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap bg-white/60 p-3 rounded-lg border border-green-100/50 cursor-pointer hover:bg-green-50/50 transition-colors max-h-[160px] overflow-y-auto"
-              >
+              <Textarea v-if="isEditingPrompt" v-model="generatedPersona.system_prompt"
+                class="min-h-[160px] text-xs text-gray-600 leading-relaxed resize-none border-green-200 focus-visible:ring-green-500 bg-white" />
+              <div v-else @click="isEditingPrompt = true"
+                class="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap bg-white/60 p-3 rounded-lg border border-green-100/50 cursor-pointer hover:bg-green-50/50 transition-colors max-h-[160px] overflow-y-auto">
                 {{ generatedPersona.system_prompt }}
               </div>
             </div>
@@ -250,11 +235,8 @@ const handleClose = () => {
       <DialogFooter class="p-6 pt-0 flex gap-3 sm:justify-end">
         <template v-if="step === 1 && !isGenerating">
           <Button variant="ghost" @click="handleClose" class="text-gray-500 h-10 px-6">取消</Button>
-          <Button
-            :disabled="!canGoToPreview"
-            @click="handleGenerate"
-            class="bg-green-600 hover:bg-green-700 shadow-md shadow-green-100 h-10 px-8 transition-all hover:translate-x-1"
-          >
+          <Button :disabled="!canGoToPreview" @click="handleGenerate"
+            class="bg-green-600 hover:bg-green-700 shadow-md shadow-green-100 h-10 px-8 transition-all hover:translate-x-1">
             开始生成
             <ArrowRight class="ml-2 w-4 h-4" />
           </Button>
@@ -265,11 +247,8 @@ const handleClose = () => {
             <RefreshCw class="mr-2 w-4 h-4" />
             不满意，重写
           </Button>
-          <Button
-            :disabled="isSaving"
-            @click="handleConfirm"
-            class="bg-green-600 hover:bg-green-700 shadow-md shadow-green-100 h-10 px-8"
-          >
+          <Button :disabled="isSaving" @click="handleConfirm"
+            class="bg-green-600 hover:bg-green-700 shadow-md shadow-green-100 h-10 px-8">
             <UserPlus v-if="!isSaving" class="mr-2 w-4 h-4" />
             <Loader v-else class="mr-2 h-4 w-4" />
             确认添加好友
@@ -278,13 +257,9 @@ const handleClose = () => {
       </DialogFooter>
     </DialogContent>
   </Dialog>
-  
-  <AvatarUploader
-    v-if="isAvatarUploaderOpen"
-    :title="`为 ${generatedPersona?.name || '伙伴'} 设置头像`"
-    @update:image="(url) => avatarUrl = url"
-    @close="isAvatarUploaderOpen = false"
-  />
+
+  <AvatarUploader v-if="isAvatarUploaderOpen" :title="`为 ${generatedPersona?.name || '伙伴'} 设置头像`"
+    @update:image="(url) => avatarUrl = url" @close="isAvatarUploaderOpen = false" />
 </template>
 
 <style scoped>
@@ -292,13 +267,16 @@ const handleClose = () => {
 .overflow-y-auto::-webkit-scrollbar {
   width: 4px;
 }
+
 .overflow-y-auto::-webkit-scrollbar-track {
   background: transparent;
 }
+
 .overflow-y-auto::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.05);
   border-radius: 999px;
 }
+
 .overflow-y-auto:hover::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.1);
 }
