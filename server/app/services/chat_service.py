@@ -736,7 +736,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         script_block = f"\n\n{script_prompt}" if script_prompt else ""
         final_instructions = final_instructions.replace("{{script-expression}}", script_block)
         
-        profile_content_block = f"\n\n[USER PROFILE]\n{profile_data}" if profile_data else ""
+        profile_content_block = f"\n\n【用户信息】\n{profile_data}" if profile_data else ""
         final_instructions = final_instructions.replace("{{user-profile}}", profile_content_block)
     except Exception as e:
         logger.error(f"Failed to load root_system_prompt template: {e}")
@@ -744,7 +744,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         if script_prompt:
             final_instructions = f"{final_instructions}\n\n{script_prompt}"
         if profile_data:
-            final_instructions = f"{final_instructions}\n\n[USER PROFILE]\n{profile_data}"
+            final_instructions = f"{final_instructions}\n\n【用户信息】\n{profile_data}"
 
     agent_messages = []
     for m in history:
