@@ -6,7 +6,10 @@ from typing import Optional
 from agents import Agent, Runner, set_default_openai_api, set_default_openai_client
 from fastapi import HTTPException
 from openai import AsyncOpenAI
+from openai.types.responses import ResponseOutputText, ResponseTextDeltaEvent
 from sqlalchemy.orm import Session
+from agents.items import MessageOutputItem
+from agents.stream_events import RunItemStreamEvent
 
 from app.models.llm import LLMConfig
 from app.prompt import get_prompt
@@ -18,7 +21,7 @@ logger = logging.getLogger(__name__)
 class PersonaGeneratorService:
     @staticmethod
     async def generate_persona(
-        db: Session, 
+        db: Session,
         request: PersonaGenerateRequest
     ) -> PersonaGenerateResponse:
         # 1. 获取 LLM 配置
@@ -84,12 +87,127 @@ class PersonaGeneratorService:
                 detail=f"Failed to parse LLM response as JSON. Check server logs for raw output."
             )
         
+        missing_fields = [key for key in ["name", "description", "system_prompt", "initial_message"] if not parsed.get(key)]
+        if missing_fields:
+            raise HTTPException(
+                status_code=502,
+                detail=f"LLM response missing required fields: {', '.join(missing_fields)}"
+            )
+
         return PersonaGenerateResponse(
-            name=parsed.get("name", request.name or "未知角色"),
-            description=parsed.get("description", ""),
-            system_prompt=parsed.get("system_prompt", ""),
-            initial_message=parsed.get("initial_message", "你好！")
+            name=parsed["name"],
+            description=parsed["description"],
+            system_prompt=parsed["system_prompt"],
+            initial_message=parsed["initial_message"]
         )
+
+    @staticmethod
+    async def generate_persona_stream(
+        db: Session,
+        request: PersonaGenerateRequest
+    ):
+        llm_config = (
+            db.query(LLMConfig)
+            .filter(LLMConfig.deleted == False)
+            .order_by(LLMConfig.id.desc())
+            .first()
+        )
+        if not llm_config:
+            yield {
+                "event": "error",
+                "data": {
+                    "code": "config_not_found",
+                    "detail": "LLM configuration not found. Please configure LLM settings first."
+                }
+            }
+            return
+
+        client = AsyncOpenAI(
+            base_url=llm_config.base_url,
+            api_key=llm_config.api_key,
+        )
+        set_default_openai_client(client, use_for_tracing=False)
+        set_default_openai_api("chat_completions")
+
+        instructions = get_prompt("persona/generate_instructions.txt").strip()
+        agent = Agent(
+            name="PersonaGenerator",
+            instructions=instructions,
+            model=llm_config.model_name,
+        )
+
+        user_input = f"请为我生成一个角色。用户描述：{request.description}"
+        if request.name:
+            user_input += f"\n姓名：{request.name}"
+
+        full_content = ""
+        try:
+            result = Runner.run_streamed(agent, user_input)
+            async for event in result.stream_events():
+                if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+                    delta = event.data.delta
+                    if delta:
+                        full_content += delta
+                        yield {"event": "delta", "data": {"delta": delta}}
+                    continue
+
+                if isinstance(event, RunItemStreamEvent) and event.name == "message_output_created":
+                    if isinstance(event.item, MessageOutputItem):
+                        message_text = ""
+                        for part in event.item.raw_item.content:
+                            if isinstance(part, ResponseOutputText):
+                                message_text += part.text or ""
+                        if message_text:
+                            full_content += message_text
+                            yield {"event": "delta", "data": {"delta": message_text}}
+                    continue
+        except Exception as e:
+            logger.error(f"LLM stream failed: {e}")
+            yield {
+                "event": "error",
+                "data": {"code": "llm_error", "detail": f"LLM call failed: {str(e)}"}
+            }
+            return
+
+        if not full_content:
+            yield {
+                "event": "error",
+                "data": {"code": "empty_response", "detail": "LLM returned empty response."}
+            }
+            return
+
+        parsed = PersonaGeneratorService._parse_llm_json(full_content)
+        if not parsed:
+            logger.error(f"Failed to parse LLM JSON response. Raw output:\n{full_content}")
+            yield {
+                "event": "error",
+                "data": {
+                    "code": "parse_error",
+                    "detail": "Failed to parse LLM response as JSON. Check server logs for raw output."
+                }
+            }
+            return
+
+        missing_fields = [key for key in ["name", "description", "system_prompt", "initial_message"] if not parsed.get(key)]
+        if missing_fields:
+            yield {
+                "event": "error",
+                "data": {
+                    "code": "missing_fields",
+                    "detail": f"LLM response missing required fields: {', '.join(missing_fields)}"
+                }
+            }
+            return
+
+        yield {
+            "event": "result",
+            "data": {
+                "name": parsed["name"],
+                "description": parsed["description"],
+                "system_prompt": parsed["system_prompt"],
+                "initial_message": parsed["initial_message"]
+            }
+        }
 
     @staticmethod
     def _parse_llm_json(content: str) -> Optional[dict]:
@@ -106,26 +224,42 @@ class PersonaGeneratorService:
         # 清理内容
         content = content.strip()
         
-        # 按行分割
-        lines = content.split('\n')
-        
-        # 删除首行的 ```json 或 ```
-        if lines and (lines[0].strip().startswith('```json') or lines[0].strip() == '```'):
-            lines = lines[1:]
-        
-        # 删除末行的 ```
-        if lines and lines[-1].strip() == '```':
-            lines = lines[:-1]
-        
-        # 重新组合
+        # 移除代码块围栏，保留中间内容
+        lines = []
+        for line in content.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('```'):
+                continue
+            lines.append(line)
+
         json_str = '\n'.join(lines).strip()
-        
-        # 尝试解析
+
         try:
             return json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.debug(f"JSON parse failed: {e}")
-            return None
+        except json.JSONDecodeError:
+            pass
+
+        # 尝试提取首个完整 JSON 对象
+        depth = 0
+        start_idx = None
+        for idx, ch in enumerate(json_str):
+            if ch == '{':
+                if depth == 0:
+                    start_idx = idx
+                depth += 1
+            elif ch == '}':
+                if depth > 0:
+                    depth -= 1
+                    if depth == 0 and start_idx is not None:
+                        candidate = json_str[start_idx:idx + 1]
+                        try:
+                            return json.loads(candidate)
+                        except json.JSONDecodeError:
+                            start_idx = None
+                            continue
+
+        logger.debug("JSON parse failed: no valid object extracted")
+        return None
 
 
 persona_generator_service = PersonaGeneratorService()

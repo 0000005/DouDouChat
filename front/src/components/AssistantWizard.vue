@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import {
   Dialog,
   DialogContent,
@@ -15,11 +15,7 @@ import { Loader } from '@/components/ai-elements/loader'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Sparkles, ArrowRight, UserPlus, RefreshCw } from 'lucide-vue-next'
-import {
-  generatePersona,
-  createFriendFromPayload,
-  type PersonaGenerateResponse,
-} from '@/api/friend-template'
+import { generatePersonaStream, type PersonaGenerateResponse } from '@/api/friend-template'
 import { useToast } from '@/composables/useToast'
 import { useSessionStore } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
@@ -46,24 +42,68 @@ const generatedPersona = ref<PersonaGenerateResponse | null>(null)
 const avatarUrl = ref<string | null>(null)
 const isAvatarUploaderOpen = ref(false)
 const scriptExpression = ref(true)
+const streamingText = ref('')
+const streamContent = ref('')
+const streamTimer = ref<number | null>(null)
+const streamController = ref<AbortController | null>(null)
 
 const canGoToPreview = computed(() => description.value.trim().length > 5)
+
+const stopStream = () => {
+  if (streamController.value) {
+    streamController.value.abort()
+    streamController.value = null
+  }
+  if (streamTimer.value !== null) {
+    window.clearInterval(streamTimer.value)
+    streamTimer.value = null
+  }
+}
 
 const handleGenerate = async () => {
   if (!canGoToPreview.value) return
 
   isGenerating.value = true
+  streamingText.value = ''
+  streamContent.value = ''
+  stopStream()
+  const controller = new AbortController()
+  streamController.value = controller
   try {
-    const res = await generatePersona({
+    streamTimer.value = window.setInterval(() => {
+      if (!streamContent.value) return
+      streamingText.value = streamContent.value.slice(-40)
+    }, 2000)
+
+    for await (const { event, data } of generatePersonaStream({
       name: name.value || undefined,
       description: description.value,
-    })
-    generatedPersona.value = res
-    step.value = 2
+    }, { signal: controller.signal })) {
+      if (event === 'delta') {
+        const delta = typeof data?.delta === 'string' ? data.delta : ''
+        if (delta) {
+          streamContent.value += delta
+          if (streamContent.value.length > 400) {
+            streamContent.value = streamContent.value.slice(-400)
+          }
+        }
+      } else if (event === 'result') {
+        generatedPersona.value = data
+        step.value = 2
+        stopStream()
+      } else if (event === 'error') {
+        throw new Error(data?.detail || '生成 AI 设定失败')
+      }
+    }
   } catch (error: any) {
-    toast.error(error.message || '生成 AI 设定失败')
+    if (error?.name !== 'AbortError') {
+      toast.error(error.message || '生成 AI 设定失败')
+    }
   } finally {
     isGenerating.value = false
+    if (streamController.value === controller) {
+      streamController.value = null
+    }
   }
 }
 
@@ -113,13 +153,21 @@ const resetAll = () => {
   generatedPersona.value = null
   isEditingPrompt.value = false
   scriptExpression.value = true
+  streamingText.value = ''
+  streamContent.value = ''
+  stopStream()
 }
 
 const handleClose = () => {
   emit('update:open', false)
+  stopStream()
   // 延迟重置，避免关闭动画时看到内容闪烁
   setTimeout(resetAll, 200)
 }
+
+onBeforeUnmount(() => {
+  stopStream()
+})
 </script>
 
 <template>
@@ -176,6 +224,12 @@ const handleClose = () => {
           <div class="text-center">
             <p class="text-base font-semibold text-green-700">正在构思人格魅力...</p>
             <p class="text-xs text-gray-400 mt-1">这可能需要1分钟左右的时间</p>
+          </div>
+          <div class="w-full max-w-[320px] overflow-hidden rounded-lg border border-green-100 bg-green-50 px-3 py-2">
+            <div class="marquee-track text-sm text-green-700">
+              <span>{{ streamingText || '正在生成角色设定...' }}</span>
+              <span aria-hidden="true">{{ streamingText || '正在生成角色设定...' }}</span>
+            </div>
           </div>
         </div>
 
@@ -279,5 +333,22 @@ const handleClose = () => {
 
 .overflow-y-auto:hover::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.1);
+}
+
+.marquee-track {
+  display: flex;
+  gap: 2rem;
+  width: max-content;
+  white-space: nowrap;
+  animation: marquee 8s linear infinite;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 </style>

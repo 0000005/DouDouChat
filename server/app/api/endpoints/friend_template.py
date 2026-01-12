@@ -1,6 +1,8 @@
+import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -61,3 +63,22 @@ async def generate_persona(
     根据描述自动生成 Persona 设定
     """
     return await persona_generator_service.generate_persona(db, payload)
+
+
+@router.post("/generate/stream")
+async def generate_persona_stream(
+    *,
+    db: Session = Depends(deps.get_db),
+    payload: persona_schemas.PersonaGenerateRequest,
+):
+    """
+    根据描述自动生成 Persona 设定（SSE 流式）
+    """
+    async def event_generator():
+        async for event_data in persona_generator_service.generate_persona_stream(db, payload):
+            event_type = event_data.get("event", "delta")
+            data_payload = event_data.get("data", {})
+            json_data = json.dumps(data_payload, ensure_ascii=False)
+            yield f"event: {event_type}\ndata: {json_data}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

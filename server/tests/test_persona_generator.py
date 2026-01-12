@@ -202,6 +202,34 @@ class TestPersonaGeneratorService:
             assert exc_info.value.status_code == 502
             assert "empty response" in exc_info.value.detail
 
+    async def test_generate_persona_missing_fields_raises_error(self, db):
+        """Test that HTTPException is raised when LLM JSON is missing fields."""
+        llm_config = LLMConfig(
+            base_url="https://api.example.com",
+            api_key="test-key",
+            model_name="gpt-4"
+        )
+        db.add(llm_config)
+        db.commit()
+
+        mock_json_response = json.dumps({
+            "name": "未完成角色",
+            "description": "缺少 system_prompt 和 initial_message"
+        }, ensure_ascii=False)
+
+        mock_result = SimpleNamespace(final_output=mock_json_response)
+
+        with patch("app.services.persona_generator_service.Runner.run", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = mock_result
+
+            request = PersonaGenerateRequest(description="字段缺失测试")
+
+            with pytest.raises(HTTPException) as exc_info:
+                await PersonaGeneratorService.generate_persona(db, request)
+
+            assert exc_info.value.status_code == 502
+            assert "missing required fields" in exc_info.value.detail
+
 
 @pytest.mark.asyncio
 class TestPersonaGeneratorAPI:
@@ -211,8 +239,35 @@ class TestPersonaGeneratorAPI:
         """Verify the API endpoint is registered."""
         from fastapi.testclient import TestClient
         from app.main import app
-        
+
         # Check that the route exists in the app
         routes = [route.path for route in app.routes]
         # The actual path includes the API prefix
         assert any("/friend-templates/generate" in route for route in routes)
+        assert any("/friend-templates/generate/stream" in route for route in routes)
+
+    async def test_stream_endpoint_returns_sse_frames(self, monkeypatch):
+        """Verify SSE endpoint yields delta and result frames."""
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        async def fake_stream(db, payload):
+            yield {"event": "delta", "data": {"delta": "正在生成..."}}
+            yield {"event": "result", "data": {
+                "name": "测试角色",
+                "description": "测试描述",
+                "system_prompt": "测试 prompt",
+                "initial_message": "你好"
+            }}
+
+        monkeypatch.setattr(persona_generator_service, "generate_persona_stream", fake_stream)
+
+        with TestClient(app) as client:
+            with client.stream("POST", "/api/friend-templates/generate/stream", json={
+                "description": "测试角色"
+            }) as response:
+                assert response.status_code == 200
+                body = "".join(list(response.iter_text()))
+
+        assert "event: delta" in body
+        assert "event: result" in body

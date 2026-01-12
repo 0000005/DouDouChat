@@ -84,6 +84,65 @@ export async function generatePersona(payload: PersonaGenerateRequest): Promise<
   return response.json()
 }
 
+export async function* generatePersonaStream(
+  payload: PersonaGenerateRequest,
+  options: { signal?: AbortSignal } = {}
+): AsyncGenerator<{ event: string, data: any }> {
+  const response = await fetch(withApiBase('/api/friend-templates/generate/stream'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to generate persona stream')
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() || ''
+
+    for (const part of parts) {
+      const lines = part.split('\n')
+      let eventType = 'delta'
+      let dataString = ''
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          dataString += (dataString ? '\n' : '') + line.slice(6)
+        }
+      }
+
+      if (dataString) {
+        try {
+          const data = JSON.parse(dataString)
+          yield { event: eventType, data }
+        } catch (e) {
+          console.error('Failed to parse SSE data JSON:', e)
+          yield { event: eventType, data: dataString }
+        }
+      }
+    }
+  }
+}
+
 /**
  * 根据生成的设定直接创建好友
  */

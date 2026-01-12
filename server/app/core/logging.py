@@ -22,9 +22,21 @@ def get_logging_config():
     log_file = os.path.join(log_dir, "app.log")
     prompt_log_file = os.path.join(log_dir, "prompt.log")
 
+    class _DropOpenAITraceKeyWarning(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if "OPENAI_API_KEY is not set, skipping trace export" in msg:
+                return False
+            return True
+
     return {
         "version": 1,
-        "disable_existing_loggers": False,  # 关键：不禁用已存在的 Logger
+        "disable_existing_loggers": False,  # 关键：不禁用已存在的 Logger       
+        "filters": {
+            "drop_openai_trace_key_warning": {
+                "()": _DropOpenAITraceKeyWarning,
+            },
+        },
         "formatters": {
             "standard": {
                 "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -57,6 +69,22 @@ def get_logging_config():
         },
         "loggers": {
             "app": {
+                "handlers": ["console", "file"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "openai": {
+                "handlers": ["console", "file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "openai.agents": {
+                "handlers": ["console", "file"],
+                "level": "INFO",
+                "filters": ["drop_openai_trace_key_warning"],
+                "propagate": False,
+            },
+            "httpx": {
                 "handlers": ["console", "file"],
                 "level": "INFO",
                 "propagate": False,
