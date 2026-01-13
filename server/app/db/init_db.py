@@ -60,12 +60,26 @@ def init_db():
         logger.info(f"Initializing main database at {db_path}...")
         try:
             conn = sqlite3.connect(db_path)
+            
+            # 1.1 Load core schema
             with open(sql_path, 'r', encoding='utf-8') as f:
                 sql_script = f.read()
             conn.executescript(sql_script)
+            
+            # 1.2 Load persona templates if the file exists
+            persona_sql_path = os.path.join(os.path.dirname(__file__), "init_persona_templates.sql")
+            if os.path.exists(persona_sql_path):
+                logger.info(f"Loading persona templates from {persona_sql_path}...")
+                with open(persona_sql_path, 'r', encoding='utf-8') as f:
+                    persona_sql = f.read()
+                conn.executescript(persona_sql)
+                logger.info("Persona templates loaded successfully.")
+            else:
+                logger.warning(f"Persona templates SQL file not found at {persona_sql_path}. Skipping.")
+                
             conn.commit()
             conn.close()
-            logger.info("Main database initialized successfully with init.sql.")
+            logger.info("Main database initialized successfully.")
         except Exception as e:
             logger.error(f"Error initializing main database: {e}")
             # If main init fails, we probably shouldn't continue

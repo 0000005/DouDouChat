@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { getStaticUrl } from '@/api/base'
 import { Search, LayoutGrid, ChevronDown, Plus } from 'lucide-vue-next'
 import { MessageResponse } from '@/components/ai-elements/message'
 import { Button } from '@/components/ui/button'
@@ -125,7 +126,10 @@ const handleAddFriend = async () => {
 }
 
 const getAvatar = (template: FriendTemplate) => {
-  return template.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=friend-${template.id}`
+  if (template.avatar) {
+    return getStaticUrl(template.avatar) || ''
+  }
+  return `https://api.dicebear.com/7.x/bottts/svg?seed=friend-${template.id}`
 }
 
 const displayTags = computed(() => ['全部', ...tagOptions.value])
@@ -159,25 +163,15 @@ onMounted(() => {
 
     <section class="gallery-toolbar">
       <div class="gallery-tabs">
-        <button
-          v-for="tag in displayTags"
-          :key="tag"
-          class="tab-btn"
-          :class="{ active: selectedTag === tag }"
-          @click="selectedTag = tag"
-        >
+        <button v-for="tag in displayTags" :key="tag" class="tab-btn" :class="{ active: selectedTag === tag }"
+          @click="selectedTag = tag">
           {{ tag }}
         </button>
       </div>
 
       <div class="search-box">
         <Search :size="16" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="搜索关键词或角色"
-          class="search-input"
-        />
+        <input v-model="searchQuery" type="text" placeholder="搜索关键词或角色" class="search-input" />
       </div>
     </section>
 
@@ -210,12 +204,7 @@ onMounted(() => {
       </div>
 
       <div v-else class="gallery-grid">
-        <article
-          v-for="template in templates"
-          :key="template.id"
-          class="gallery-card"
-          @click="openDetail(template)"
-        >
+        <article v-for="template in templates" :key="template.id" class="gallery-card" @click="openDetail(template)">
           <div class="card-avatar">
             <img :src="getAvatar(template)" :alt="template.name" />
           </div>
@@ -293,10 +282,12 @@ onMounted(() => {
 }
 
 .gallery-header {
-  padding: 20px 130px 12px 24px; /* Right padding for global window controls */
+  padding: 20px 130px 12px 24px;
+  /* Right padding for global window controls */
   border-bottom: 1px solid #e3e3e3;
   background: #fdfdfd;
-  -webkit-app-region: drag; /* Make header draggable */
+  -webkit-app-region: drag;
+  /* Make header draggable */
 }
 
 .gallery-title {
