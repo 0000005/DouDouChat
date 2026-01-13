@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from datetime import datetime
 from app.models.friend import Friend
+from app.models.chat import ChatSession, Message
 from app.schemas.friend import FriendCreate, FriendUpdate
 
 def get_friend(db: Session, friend_id: int) -> Optional[Friend]:
@@ -52,3 +54,36 @@ def delete_friend(db: Session, friend_id: int) -> bool:
     db.add(db_friend)
     db.commit()
     return True
+
+def ensure_initial_message(db: Session, friend_id: int, initial_message: Optional[str] = None) -> Optional[Message]:
+    """
+    确保好友有初始招呼消息。如果没有 session，则创建一个并添加初始消息。
+    """
+    # 检查是否已有 session
+    existing_session = db.query(ChatSession).filter(ChatSession.friend_id == friend_id, ChatSession.deleted == False).first()
+    if existing_session:
+        return None
+
+    if not initial_message:
+        initial_message = "你好！很高兴见到你。"
+
+    # 创建 session
+    db_session = ChatSession(
+        friend_id=friend_id,
+        title="新对话",
+        last_message_time=datetime.now()
+    )
+    db.add(db_session)
+    db.flush() # 获取 ID
+
+    # 创建消息
+    db_message = Message(
+        session_id=db_session.id,
+        friend_id=friend_id,
+        role="assistant",
+        content=initial_message
+    )
+    db.add(db_message)
+    db.commit()
+    db.refresh(db_message)
+    return db_message

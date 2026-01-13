@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.friend import Friend
 from app.models.friend_template import FriendTemplate
 from app.schemas.friend_template import FriendTemplateCreateFriend
+from app.services import friend_service
 
 
 def get_friend_template(db: Session, template_id: int) -> Optional[FriendTemplate]:
@@ -55,6 +56,8 @@ def create_friend_from_template(db: Session, template_id: int) -> Optional[Frien
     db.add(db_friend)
     db.commit()
     db.refresh(db_friend)
+    # 创建初始招呼消息
+    friend_service.ensure_initial_message(db, db_friend.id, template.initial_message)
     return db_friend
 
 
@@ -69,4 +72,6 @@ def create_friend_from_payload(db: Session, payload: FriendTemplateCreateFriend)
     db.add(db_friend)
     db.commit()
     db.refresh(db_friend)
+    # 创建初始招呼消息
+    friend_service.ensure_initial_message(db, db_friend.id, payload.initial_message)
     return db_friend
