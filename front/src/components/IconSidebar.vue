@@ -31,6 +31,13 @@ const emit = defineEmits<{
 const isPopoverOpen = ref(false)
 const isAboutOpen = ref(false)
 const settingsStore = useSettingsStore()
+import { useSessionStore } from '@/stores/session'
+
+const sessionStore = useSessionStore()
+
+const totalUnread = computed(() => {
+  return Object.values(sessionStore.unreadCounts).reduce((acc, count) => acc + count, 0)
+})
 
 const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/avataaars/svg?seed=doudou'
 
@@ -41,8 +48,6 @@ const userAvatarUrl = computed(() =>
 onMounted(() => {
   settingsStore.fetchUserSettings()
 })
-
-
 
 const handleOpenProfile = () => {
   isPopoverOpen.value = false
@@ -79,7 +84,7 @@ const navItems = [
       <button v-for="item in navItems" :key="item.id" class="nav-btn" :class="{ active: activeTab === item.id }"
         :title="item.label" @click="emit('update:activeTab', item.id)">
         <component :is="item.icon" :size="22" :stroke-width="1.5" />
-        <span v-if="item.id === 'chat'" class="unread-dot"></span>
+        <span v-if="item.id === 'chat' && totalUnread > 0" class="unread-dot"></span>
       </button>
     </nav>
 

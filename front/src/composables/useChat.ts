@@ -8,16 +8,14 @@ export function useChat() {
     const store = useSessionStore()
     const thinkingModeStore = useThinkingModeStore()
     const input = ref('')
-    const isSubmitting = ref(false)
 
     // messages is computed from store
     const messages = computed(() => store.currentMessages)
 
-    // Status: 'idle' | 'submitted' | 'streaming'
-    // submitted = waiting for first content, streaming = actively receiving content
+    // Status: 'ready' | 'streaming'
+    // Now directly based on per-friend streaming state from store
     const status = computed(() => {
         if (store.isStreaming) return 'streaming'
-        if (isSubmitting.value) return 'submitted'
         return 'ready'
     })
 
@@ -25,7 +23,7 @@ export function useChat() {
     const isThinkingMode = computed(() => thinkingModeStore.isEnabled)
     const toggleThinkingMode = () => thinkingModeStore.toggle()
 
-    const handleSubmit = async (e?: Event | any) => {
+    const handleSubmit = (e?: Event | any) => {
         if (e && typeof e.preventDefault === 'function') {
             e.preventDefault()
         }
@@ -34,14 +32,10 @@ export function useChat() {
         const content = input.value
         input.value = ''
 
-        isSubmitting.value = true
-        try {
-            await store.sendMessage(content, thinkingModeStore.isEnabled)
-        } catch (error) {
-            console.error(error)
-        } finally {
-            isSubmitting.value = false
-        }
+        // Fire and forget - streaming state is managed per-friend in store
+        store.sendMessage(content, thinkingModeStore.isEnabled).catch(error => {
+            console.error('Failed to send message:', error)
+        })
     }
 
     return {

@@ -16,6 +16,7 @@ from app.services.settings_service import SettingsService
 from app.services.memo.bridge import MemoService
 from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
 from app.prompt import get_prompt
+from app.db.session import SessionLocal
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
@@ -491,179 +492,278 @@ async def _archive_session_async(
     except Exception as e:
         logger.error(f"[Archive Async] Session {session_id} unexpected error: {e}")
 
+async def _run_chat_generation_task(
+    session_id: int,
+    friend_id: int,
+    user_msg_id: int,
+    ai_msg_id: int,
+    message_content: str,
+    enable_thinking: bool,
+    queue: asyncio.Queue
+):
+    """
+    Background task to handle LLM generation and persistence.
+    Decoupled from HTTP response to ensure completion even if client disconnects.
+    """
+    db = SessionLocal()
+    logger.info(f"[GenTask] Starting generation for Session {session_id}, AI Msg {ai_msg_id}")
+    
+    try:
+        # 1. Fetch Context Data
+        chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        friend = db.query(Friend).filter(Friend.id == friend_id).first()
+        friend_name = friend.name if friend else "AI"
+        
+        llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
+        if not llm_config:
+            await queue.put({"event": "error", "data": {"code": "config_error", "detail": "LLM Config missing in background task"}})
+            return
+
+        # 2. Prepare History & Recall
+        enable_recall = SettingsService.get_setting(db, "memory", "recall_enabled", True)
+        show_thinking = SettingsService.get_setting(db, "chat", "show_thinking", False)
+        show_tools = SettingsService.get_setting(db, "chat", "show_tool_calls", False)
+        
+        history = (
+            db.query(Message)
+            .filter(
+                Message.session_id == session_id, 
+                Message.deleted == False, 
+                Message.id != user_msg_id,
+                Message.id != ai_msg_id
+            )
+            .order_by(Message.create_time.desc())
+            .limit(10)
+            .all()
+        )
+        history.reverse()
+        
+        profile_data = ""
+        injected_recall_messages = []
+        
+        if enable_recall:
+            try:
+                profiles = await MemoService.get_user_profiles(DEFAULT_USER_ID, DEFAULT_SPACE_ID)
+                if profiles and profiles.profiles:
+                    profile_lines = []
+                    for item in profiles.profiles:
+                        if not item or not item.content: continue
+                        attributes = item.attributes or {}
+                        topic = (attributes.get("topic") or "").strip()
+                        sub_topic = (attributes.get("sub_topic") or "").strip()
+                        if topic or sub_topic:
+                            profile_lines.append(f"- {topic}\t{sub_topic}\t{item.content.strip()}")
+                        else:
+                            profile_lines.append(f"- {item.content.strip()}")
+                    profile_data = "\n".join(profile_lines)
+                
+                messages_for_recall = [{"role": m.role, "content": m.content} for m in history]
+                messages_for_recall.append({"role": "user", "content": message_content})
+                
+                recall_result = await RecallService.perform_recall(
+                    db, DEFAULT_USER_ID, DEFAULT_SPACE_ID, messages_for_recall, friend_id
+                )
+                injected_recall_messages = recall_result.get("injected_messages", [])
+                footprints = recall_result.get("footprints", [])
+                
+                for fp in footprints:
+                    if fp["type"] == "thinking" and show_thinking and enable_thinking:
+                        await queue.put({"event": "thinking", "data": {"delta": f"> {fp['content']}\n"}})
+                    elif fp["type"] == "tool_call" and show_tools:
+                        await queue.put({"event": "tool_call", "data": {"tool_name": fp["name"], "arguments": fp["arguments"]}})
+                    elif fp["type"] == "tool_result" and show_tools:
+                        await queue.put({"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}})
+            except Exception as e:
+                logger.error(f"[GenTask] Recall failed: {e}")
+
+        # 3. Construct Prompt
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        persona_prompt = (friend.system_prompt if friend and friend.system_prompt else get_prompt("chat/default_system_prompt.txt"))
+        if persona_prompt:
+            persona_prompt = persona_prompt.strip()
+        else:
+            persona_prompt = ""
+        
+        script_prompt = ""
+        if friend and friend.script_expression:
+            try:
+                script_prompt = get_prompt("persona/script_expression.txt").strip()
+            except Exception:
+                pass
+
+        try:
+            root_template = get_prompt("chat/root_system_prompt.txt")
+            final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt)
+            final_instructions = final_instructions.replace("{{script-expression}}", f"\n\n{script_prompt}" if script_prompt else "")
+            final_instructions = final_instructions.replace("{{user-profile}}", f"\n\n【用户信息】\n{profile_data}" if profile_data else "")
+            final_instructions = final_instructions.replace("{{current-time}}", current_time)
+        except Exception:
+            final_instructions = persona_prompt
+            if script_prompt: final_instructions += f"\n\n{script_prompt}"
+            if profile_data: final_instructions += f"\n\n【用户信息】\n{profile_data}"
+            final_instructions += f"\n\n【当前时间】\n{current_time}"
+
+        # 4. Run LLM
+        agent_messages = [{"role": m.role, "content": m.content} for m in history]
+        if injected_recall_messages:
+            agent_messages.extend(injected_recall_messages)
+        agent_messages.append({"role": "user", "content": message_content})
+
+        client = AsyncOpenAI(base_url=llm_config.base_url, api_key=llm_config.api_key)
+        set_default_openai_client(client, use_for_tracing=False)
+        set_default_openai_api("chat_completions")
+
+        model_settings = ModelSettings()
+        if not enable_thinking:
+            model_settings = ModelSettings(reasoning=Reasoning(effort="none"))
+
+        agent = Agent(
+            name=friend_name,
+            instructions=final_instructions,
+            model=llm_config.model_name,
+            model_settings=model_settings,
+        )
+
+        full_ai_content = ""
+        saved_content = ""
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        finish_reason = "stop"
+        
+        buffer = ""
+        is_thinking_tag = False
+        THINK_START = "<think>"
+        THINK_END = "</think>"
+        
+        result = Runner.run_streamed(agent, agent_messages)
+        async for event in result.stream_events():
+            if event.type == "raw_response_event" and isinstance(event.data, ResponseReasoningSummaryTextDeltaEvent):
+                if enable_thinking and show_thinking:
+                    delta = event.data.delta
+                    if delta:
+                        await queue.put({"event": "thinking", "data": {"delta": delta}})
+                continue
+
+            if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
+                if enable_thinking and show_thinking and isinstance(event.item, ReasoningItem):
+                    raw = event.item.raw_item
+                    text = getattr(raw, 'content', '') or str(getattr(raw, 'summary', ''))
+                    if text:
+                        await queue.put({"event": "thinking", "data": {"delta": text}})
+                continue
+
+            if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+                delta = event.data.delta
+                if delta:
+                    full_ai_content += delta
+                    buffer += delta
+                    while buffer:
+                        if not is_thinking_tag:
+                            start_idx = buffer.find(THINK_START)
+                            if start_idx != -1:
+                                if start_idx > 0:
+                                    msg_delta = buffer[:start_idx]
+                                    saved_content += msg_delta
+                                    await queue.put({"event": "message", "data": {"delta": msg_delta}})
+                                buffer = buffer[start_idx + len(THINK_START):]
+                                is_thinking_tag = True
+                            else:
+                                if "<" not in buffer:
+                                    saved_content += buffer
+                                    await queue.put({"event": "message", "data": {"delta": buffer}})
+                                    buffer = ""
+                                else:
+                                    break
+                        else:
+                            end_idx = buffer.find(THINK_END)
+                            if end_idx != -1:
+                                if end_idx > 0 and enable_thinking and show_thinking:
+                                    await queue.put({"event": "thinking", "data": {"delta": buffer[:end_idx]}})
+                                buffer = buffer[end_idx + len(THINK_END):]
+                                is_thinking_tag = False
+                            else:
+                                if "</" not in buffer:
+                                    if enable_thinking and show_thinking:
+                                        await queue.put({"event": "thinking", "data": {"delta": buffer}})
+                                    buffer = ""
+                                else:
+                                    break
+        
+        if buffer:
+            if is_thinking_tag and enable_thinking and show_thinking:
+                await queue.put({"event": "thinking", "data": {"delta": buffer}})
+            elif not is_thinking_tag:
+                saved_content += buffer
+                await queue.put({"event": "message", "data": {"delta": buffer}})
+
+        # 5. Save to DB
+        ai_msg = db.query(Message).filter(Message.id == ai_msg_id).first()
+        if ai_msg:
+            ai_msg.content = saved_content if saved_content else "[No response]"
+            db.commit()
+            chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+            chat_session.update_time = datetime.now()
+            chat_session.last_message_time = datetime.now()
+            if chat_session.memory_generated:
+                chat_session.memory_generated = False
+            db.commit()
+
+        usage["completion_tokens"] = len(full_ai_content)
+        await queue.put({
+            "event": "done",
+            "data": {
+                "finish_reason": finish_reason,
+                "usage": usage,
+                "message_id": ai_msg_id
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"[GenTask] Error: {e}", exc_info=True)
+        await queue.put({"event": "error", "data": {"code": "task_error", "detail": str(e)}})
+    finally:
+        await queue.put(None)
+        db.close()
+
 async def send_message_stream(db: Session, session_id: int, message_in: chat_schemas.MessageCreate):
     """
-    Send a message (User) and stream the LLM response using SSE event structure.
-    Yields dictionaries representing SSE events.
+    Send a message and stream the LLM response.
+    The actual generation is handled in a background task to ensure persistence.
     """
-    # 1. Verify session and fetch friend/config
     db_session = get_session(db, session_id)
     if not db_session:
         yield {"event": "error", "data": {"code": "session_not_found", "detail": "Session not found"}}
         return
-
-    friend = db.query(Friend).filter(Friend.id == db_session.friend_id).first()
-    persona_prompt = (friend.system_prompt if friend else get_prompt(
-        "chat/default_system_prompt.txt"
-    )).strip()
-    friend_name = friend.name if friend else "AI"
 
     llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
     if not llm_config:
         yield {"event": "error", "data": {"code": "config_not_found", "detail": "LLM configuration not found"}}
         return
 
-    # 2. Save User Message
-    user_msg = Message(
-        session_id=session_id,
-        role="user",
-        content=message_in.content
-    )
+    # 1. Save User Message
+    user_msg = Message(session_id=session_id, role="user", content=message_in.content)
     db.add(user_msg)
     db.commit()
     db.refresh(user_msg)
 
-    # 3. Prepare LLM Context
-    # 3.1 Fetch Memory & Settings
-    enable_recall = SettingsService.get_setting(db, "memory", "recall_enabled", True)
-    show_thinking = SettingsService.get_setting(db, "chat", "show_thinking", False)
-    show_tools = SettingsService.get_setting(db, "chat", "show_tool_calls", False)
-    logger.info(f"[ChatService] Settings: enable_recall={enable_recall}, show_thinking={show_thinking}, show_tools={show_tools}")
-
-    history = (
-        db.query(Message)
-        .filter(Message.session_id == session_id, Message.deleted == False, Message.id != user_msg.id)
-        .order_by(Message.create_time.desc())
-        .limit(10)
-        .all()
-    )
-    history.reverse()
-
-    # 3.2 Perform Recall if enabled
-    profile_data = ""
-    injected_recall_messages = []
-    
-    if enable_recall:
-        # a. Fetch Profile (Global)
-        try:
-            profiles = await MemoService.get_user_profiles(
-                DEFAULT_USER_ID, DEFAULT_SPACE_ID
-            )
-            if profiles and profiles.profiles:
-                profile_lines = []
-                for item in profiles.profiles:
-                    if not item or not item.content:
-                        continue
-                    attributes = item.attributes or {}
-                    topic = (attributes.get("topic") or "").strip()
-                    sub_topic = (attributes.get("sub_topic") or "").strip()
-                    if topic or sub_topic:
-                        profile_lines.append(
-                            f"- {topic}\t{sub_topic}\t{item.content.strip()}"
-                        )
-                    else:
-                        profile_lines.append(f"- {item.content.strip()}")
-                profile_data = "\n".join(profile_lines)
-        except Exception as e:
-            logger.error(f"[Recall] Failed to fetch profile: {e}")
-
-        # b. Perform Event Recall (Local to friend)
-        try:
-            # Prepare messages for recall agent
-            messages_for_recall = [{"role": m.role, "content": m.content} for m in history]
-            messages_for_recall.append({"role": "user", "content": message_in.content})
-            
-            recall_result = await RecallService.perform_recall(
-                db, DEFAULT_USER_ID, DEFAULT_SPACE_ID, messages_for_recall, db_session.friend_id
-            )
-            injected_recall_messages = recall_result.get("injected_messages", [])
-            footprints = recall_result.get("footprints", [])
-            if not any(fp.get("type") in ("tool_call", "tool_result") for fp in footprints):
-                logger.info(
-                    "[Recall] 回忆服务未触发工具调用, session_id=%s, friend_id=%s",
-                    session_id,
-                    db_session.friend_id,
-                )
-
-            # Yield footprints early if configured
-            for fp in footprints:
-                if fp["type"] == "thinking" and show_thinking and message_in.enable_thinking:
-                    yield {"event": "thinking", "data": {"delta": f"> {fp['content']}\n"}}
-                elif fp["type"] == "tool_call" and show_tools:
-                    yield {"event": "tool_call", "data": {"tool_name": fp["name"], "arguments": fp["arguments"]}}
-                elif fp["type"] == "tool_result" and show_tools:
-                    yield {"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}}
-        except Exception as e:
-            logger.error(f"[Recall] Event recall failed: {e}")
-
-    # 3.3 Construct final instructions and messages using root template
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    script_prompt = ""
-    if friend and friend.script_expression:
-        try:
-            script_prompt = get_prompt("persona/script_expression.txt").strip()
-        except Exception as e:
-            logger.error(f"Failed to load script_expression prompt: {e}")
-
-    try:
-        root_template = get_prompt("chat/root_system_prompt.txt")
-        final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt)
-        
-        # 动态处理可选部分的间距 (Dynamic spacing)
-        script_block = f"\n\n{script_prompt}" if script_prompt else ""
-        final_instructions = final_instructions.replace("{{script-expression}}", script_block)
-        
-        profile_content_block = f"\n\n【用户信息】\n{profile_data}" if profile_data else ""
-        final_instructions = final_instructions.replace("{{user-profile}}", profile_content_block)
-        final_instructions = final_instructions.replace("{{current-time}}", current_time)
-    except Exception as e:
-        logger.error(f"Failed to load root_system_prompt template: {e}")
-        final_instructions = persona_prompt
-        if script_prompt:
-            final_instructions = f"{final_instructions}\n\n{script_prompt}"
-        if profile_data:
-            final_instructions = f"{final_instructions}\n\n【用户信息】\n{profile_data}"
-        final_instructions = (
-            f"{final_instructions}\n\n【当前时间】\n{current_time}"
-        )
-
-    agent_messages = []
-    for m in history:
-        agent_messages.append({"role": m.role, "content": m.content})
-    
-    # Inject recall messages before the current user message
-    if injected_recall_messages:
-        agent_messages.extend(injected_recall_messages)
-        
-    agent_messages.append({"role": "user", "content": message_in.content})      
-
-    prompt_logger.info(json.dumps({
-        "type": "chat_prompt",
-        "source": "send_message_stream",
-        "session_id": session_id,
-        "friend_id": db_session.friend_id,
-        "friend_name": friend_name,
-        "model": llm_config.model_name,
-        "instructions": final_instructions,
-        "messages": agent_messages,
-        "enable_thinking": message_in.enable_thinking,
-        "show_thinking": show_thinking,
-        "show_tools": show_tools,
-        "recall_enabled": enable_recall,
-    }, ensure_ascii=False, default=str))
-
-    # Yield Start Event
-    # Create AI Message placeholder to get ID
-    ai_msg = Message(
-        session_id=session_id,
-        role="assistant",
-        content="", # Placeholder, will be updated
-        friend_id=db_session.friend_id
-    )
+    # 2. Create AI Message Placeholder
+    ai_msg = Message(session_id=session_id, role="assistant", content="", friend_id=db_session.friend_id)
     db.add(ai_msg)
     db.commit()
     db.refresh(ai_msg)
 
+    # 3. Start Background Generation Task
+    queue = asyncio.Queue()
+    asyncio.create_task(_run_chat_generation_task(
+        session_id=session_id,
+        friend_id=db_session.friend_id,
+        user_msg_id=user_msg.id,
+        ai_msg_id=ai_msg.id,
+        message_content=message_in.content,
+        enable_thinking=message_in.enable_thinking,
+        queue=queue
+    ))
+
+    # 4. Stream events from the queue
     yield {
         "event": "start",
         "data": {
@@ -672,251 +772,16 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
             "user_message_id": user_msg.id,
             "model": llm_config.model_name,
             "friend_id": db_session.friend_id,
-            "friend_name": friend_name,
             "created_at": datetime.now().isoformat()
         }
     }
 
-    # 4. Call LLM via openai-agents
-    client = AsyncOpenAI(
-        base_url=llm_config.base_url,
-        api_key=llm_config.api_key,
-    )
-    set_default_openai_client(client, use_for_tracing=False)
-    set_default_openai_api("chat_completions")
+    while True:
+        event = await queue.get()
+        if event is None: # Sentinel
+            break
+        yield event
 
-    model_settings = ModelSettings()
-    if not message_in.enable_thinking:
-        model_settings = ModelSettings(reasoning=Reasoning(effort="none"))
-
-    agent = Agent(
-        name=friend_name,
-        instructions=final_instructions,
-        model=llm_config.model_name,
-        model_settings=model_settings,
-    )
-
-    full_ai_content = ""
-    full_thinking_content = ""
-    saved_content = ""
-    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-    finish_reason = "stop"
-
-    # Buffer for tag parsing
-    buffer = ""
-    is_thinking = False
-    THINK_START = "<think>"
-    THINK_END = "</think>"
-    enable_thinking = message_in.enable_thinking
-    message_emitted = False
-
-    # SSE timing debug
-    sse_start_time = time.perf_counter()
-    sse_frame_count = 0
-    sse_first_frame_logged = False
-    # sse_logger.debug(f"[SESSION {session_id}] Starting LLM stream...")
-    
-    try:
-        result = Runner.run_streamed(agent, agent_messages)
-        # sse_logger.debug(f"[SESSION {session_id}] Runner.run_streamed returned at {time.perf_counter() - sse_start_time:.3f}s")
-        
-        async for event in result.stream_events():
-            elapsed = time.perf_counter() - sse_start_time
-            if not sse_first_frame_logged:
-                # sse_logger.debug(f"[SESSION {session_id}] FIRST EVENT at {elapsed:.3f}s - type: {type(event).__name__}")
-                sse_first_frame_logged = True
-            
-            # PRIORITY 1: Handle streaming reasoning delta events (REAL-TIME)
-            # This catches reasoning tokens as they stream, BEFORE reasoning_item_created
-            if event.type == "raw_response_event" and isinstance(event.data, ResponseReasoningSummaryTextDeltaEvent):
-                if enable_thinking and show_thinking:
-                    reasoning_delta = event.data.delta
-                    if reasoning_delta:
-                        full_thinking_content += reasoning_delta
-                        sse_frame_count += 1
-                        # sse_logger.debug(f"[SESSION {session_id}] YIELD thinking_delta #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_delta[:30]}...")
-                        yield {
-                            "event": "thinking",
-                            "data": {"delta": reasoning_delta}
-                        }
-                continue
-            
-            # PRIORITY 2: Handle reasoning item events (SUMMARY - arrives after all deltas)
-            # Keep this for models that don't support streaming reasoning
-            if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
-                if enable_thinking and show_thinking and isinstance(event.item, ReasoningItem):
-                    # Extract reasoning content from the raw item
-                    raw_item = event.item.raw_item
-                    reasoning_text = ""
-                    
-                    # 1. Handle GLM-style summary list
-                    if hasattr(raw_item, 'summary') and raw_item.summary:
-                        for summary_item in raw_item.summary:
-                            if hasattr(summary_item, 'text'):
-                                reasoning_text += summary_item.text
-                            elif isinstance(summary_item, dict):
-                                reasoning_text += summary_item.get('text', '')
-                    
-                    # 2. Handle standard content field
-                    elif hasattr(raw_item, 'content') and raw_item.content:
-                        reasoning_text = raw_item.content
-                    
-                    # 3. Handle dict-style
-                    elif isinstance(raw_item, dict):
-                        reasoning_text = raw_item.get('content', '') or raw_item.get('summary', '')
-                    
-                    if reasoning_text:
-                        full_thinking_content += reasoning_text
-                        sse_frame_count += 1
-                        # sse_logger.debug(f"[SESSION {session_id}] YIELD thinking #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {reasoning_text[:30]}...")
-                        yield {
-                            "event": "thinking",
-                            "data": {"delta": reasoning_text}
-                        }
-                continue
-
-            # PRIORITY 3: Handle full message output if no text deltas streamed
-            if isinstance(event, RunItemStreamEvent) and event.name == "message_output_created":
-                if isinstance(event.item, MessageOutputItem) and not message_emitted:
-                    message_text = ""
-                    for part in event.item.raw_item.content:
-                        if isinstance(part, ResponseOutputText):
-                            message_text += part.text or ""
-                    if message_text:
-                        saved_content += message_text
-                        yield {"event": "message", "data": {"delta": message_text}}
-                        message_emitted = True
-                continue
-            
-            # Handle text delta events (with <think> tag parsing for models like DeepSeek-R1)
-            if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
-                delta = event.data.delta
-                if delta:
-                    full_ai_content += delta
-                    buffer += delta
-
-                    while buffer:
-                        if not is_thinking:
-                            # Look for <think>
-                            start_idx = buffer.find(THINK_START)
-                            if start_idx != -1:
-                                # Yield content before tag as message
-                                if start_idx > 0:
-                                    msg_delta = buffer[:start_idx]
-                                    saved_content += msg_delta
-                                    sse_frame_count += 1
-                                    # sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {msg_delta[:30]}...")
-                                    yield {
-                                        "event": "message",
-                                        "data": {"delta": msg_delta}
-                                    }
-                                    message_emitted = True
-                                buffer = buffer[start_idx + len(THINK_START):]  
-                                is_thinking = True
-                                # If thinking mode disabled, skip thinking content silently
-                            else:
-                                # Check partial tag
-                                partial_len = 0
-                                for i in range(1, len(THINK_START)):
-                                    if buffer.endswith(THINK_START[:i]):
-                                        partial_len = i
-                                
-                                if partial_len > 0:
-                                    # Yield everything up to partial
-                                    to_yield = buffer[:-partial_len]
-                                    buffer = buffer[-partial_len:]
-                                    if to_yield:
-                                        saved_content += to_yield
-                                        yield {"event": "message", "data": {"delta": to_yield}}
-                                        message_emitted = True
-                                    break  # Wait for more data
-                                else:
-                                    # Yield all
-                                    saved_content += buffer
-                                    sse_frame_count += 1
-                                    # sse_logger.debug(f"[SESSION {session_id}] YIELD message #{sse_frame_count} at {time.perf_counter() - sse_start_time:.3f}s: {buffer[:30]}...")
-                                    yield {"event": "message", "data": {"delta": buffer}}
-                                    message_emitted = True
-                                    buffer = ""
-                        else:
-                            # Look for </think>
-                            end_idx = buffer.find(THINK_END)
-                            if end_idx != -1:
-                                # Yield content before tag as thinking (only if enabled)
-                                if end_idx > 0 and enable_thinking and show_thinking:
-                                    yield {
-                                        "event": "thinking",
-                                        "data": {"delta": buffer[:end_idx]}
-                                    }
-                                buffer = buffer[end_idx + len(THINK_END):]
-                                is_thinking = False
-                            else:
-                                # Check partial end tag
-                                partial_len = 0
-                                for i in range(1, len(THINK_END)):
-                                    if buffer.endswith(THINK_END[:i]):
-                                        partial_len = i
-                                
-                                if partial_len > 0:
-                                    to_yield = buffer[:-partial_len]
-                                    buffer = buffer[-partial_len:]
-                                    if to_yield and enable_thinking and show_thinking:
-                                        yield {"event": "thinking", "data": {"delta": to_yield}}
-                                    break
-                                else:
-                                    if enable_thinking and show_thinking:
-                                        yield {"event": "thinking", "data": {"delta": buffer}}
-                                    buffer = ""
-                        
-        # Flush remaining buffer
-        if buffer:
-            if is_thinking and enable_thinking and show_thinking:
-                yield {"event": "thinking", "data": {"delta": buffer}}
-            elif not is_thinking:
-                saved_content += buffer
-                yield {"event": "message", "data": {"delta": buffer}}
-                message_emitted = True
-
-    except Exception as e:
-        # LLM call failed - yield error event
-        error_message = str(e)
-        yield {
-            "event": "error",
-            "data": {
-                "code": "llm_error",
-                "detail": f"LLM 调用失败: {error_message}"
-            }
-        }
-        finish_reason = "error"
-        # Store error message as AI response
-        full_ai_content = f"[Error: {error_message}]"
-
-    # 5. Save AI Response once finished
-    # Only save the cleaned message content (excluding reasoning)
-    ai_msg.content = saved_content if saved_content else "[No response]"
-    now = datetime.now()
-    db_session.update_time = now
-    db_session.last_message_time = now
-    
-    # 如果该会话之前已归档，产生新消息后重置为“未处理”状态，以便再次扫描记忆
-    if db_session.memory_generated:
-        db_session.memory_generated = False
-        logger.info(f"[Session Stream] Resetting memory_generated=False for session {session_id} due to new message.")
-        
-    db.commit()
-    db.refresh(ai_msg)
-
-    # Always yield Done Event
-    usage["completion_tokens"] = len(full_ai_content)
-    
-    yield {
-        "event": "done",
-        "data": {
-            "finish_reason": finish_reason,
-            "usage": usage,
-            "message_id": ai_msg.id
-        }
-    }
 
 def check_and_archive_expired_sessions(db: Session) -> int:
     """

@@ -43,7 +43,7 @@ const emit = defineEmits<{
 
 const sessionStore = useSessionStore()
 const friendStore = useFriendStore()
-const { currentFriendId } = storeToRefs(sessionStore)
+const { currentFriendId, unreadCounts } = storeToRefs(sessionStore)
 const { friends, isLoading: friendsLoading } = storeToRefs(friendStore)
 
 const searchQuery = ref('')
@@ -53,8 +53,8 @@ const getLastMessagePreview = (friend: any): string => {
   if (friend.last_message) {
     const prefix = friend.last_message_role === 'user' ? '[我]' : ''
     // Limit length to 30 characters
-    const content = friend.last_message.length > 30 
-      ? friend.last_message.substring(0, 30) + '...' 
+    const content = friend.last_message.length > 30
+      ? friend.last_message.substring(0, 30) + '...'
       : friend.last_message
     return `${prefix}${content}`
   }
@@ -190,9 +190,13 @@ onMounted(async () => {
       <div v-else v-for="friend in filteredFriends" :key="friend.id" class="friend-item"
         :class="{ active: friend.id === currentFriendId, pinned: !!friend.pinned_at }"
         @click="onSelectFriend(friend.id)">
-        <!-- Avatar -->
-        <div class="friend-avatar">
-          <img :src="getFriendAvatar(friend)" :alt="friend.name" />
+        <div class="avatar-wrapper relative">
+          <div class="friend-avatar">
+            <img :src="getFriendAvatar(friend)" :alt="friend.name" />
+          </div>
+          <div v-if="unreadCounts[friend.id] > 0" class="unread-badge">
+            {{ unreadCounts[friend.id] }}
+          </div>
         </div>
 
         <!-- Content -->
@@ -486,4 +490,29 @@ onMounted(async () => {
   background: #06ad56;
 }
 
+.avatar-wrapper {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.unread-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: #fa5151;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px #fff;
+  z-index: 10;
+}
 </style>

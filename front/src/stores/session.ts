@@ -26,11 +26,15 @@ export const useSessionStore = defineStore('session', () => {
     // Current selected friend ID (WeChat-style: contact list)
     const currentFriendId = ref<number | null>(null)
 
+    // Unread counts map: friendId -> count
+    const unreadCounts = ref<Record<number, number>>({})
+
     // Messages map: friendId -> Message[]
     const messagesMap = ref<Record<number, Message[]>>({})
 
     const isLoading = ref(false)
-    const isStreaming = ref(false)
+    // Streaming state per friend: friendId -> boolean
+    const streamingMap = ref<Record<number, boolean>>({})
 
     // Current specific session ID (if not null, show only this session's messages)
     const currentSessionId = ref<number | null>(null)
@@ -41,6 +45,12 @@ export const useSessionStore = defineStore('session', () => {
     const currentMessages = computed(() => {
         if (!currentFriendId.value) return []
         return messagesMap.value[currentFriendId.value] || []
+    })
+
+    // Is current friend's chat streaming?
+    const isStreaming = computed(() => {
+        if (!currentFriendId.value) return false
+        return !!streamingMap.value[currentFriendId.value]
     })
 
     // Fetch messages for a specific friend (merged from all sessions)
@@ -113,6 +123,10 @@ export const useSessionStore = defineStore('session', () => {
     // Select a friend and load their chat history
     const selectFriend = async (friendId: number) => {
         currentFriendId.value = friendId
+        // Clear unread count when entering chat
+        if (unreadCounts.value[friendId]) {
+            unreadCounts.value[friendId] = 0
+        }
         currentSessionId.value = null // Reset to default merged/latest view
         isLoading.value = true
         try {
@@ -169,18 +183,22 @@ export const useSessionStore = defineStore('session', () => {
                 if (msgIndex === -1) continue
 
                 if (event === 'start') {
-                    // Stream started - update metadata if needed
-                    // data: { session_id, message_id, user_message_id, ... }
+                    // Stream started - mark as streaming immediately
+                    streamingMap.value[friendId] = true
+                    friendStore.updateLastMessage(friendId, '...', 'assistant')
                 } else if (event === 'thinking') {
-                    isStreaming.value = true
+                    streamingMap.value[friendId] = true
                     const delta = data.delta || ''
                     messagesMap.value[friendId][msgIndex].thinkingContent += delta
+                    friendStore.updateLastMessage(friendId, '[思考中...]', 'assistant')
                 } else if (event === 'message') {
-                    isStreaming.value = true
+                    streamingMap.value[friendId] = true
                     const delta = data.delta || ''
                     messagesMap.value[friendId][msgIndex].content += delta
+                    // Real-time update of sidebar preview
+                    friendStore.updateLastMessage(friendId, messagesMap.value[friendId][msgIndex].content, 'assistant')
                 } else if (event === 'tool_call') {
-                    isStreaming.value = true
+                    streamingMap.value[friendId] = true
                     if (!messagesMap.value[friendId][msgIndex].toolCalls) {
                         messagesMap.value[friendId][msgIndex].toolCalls = []
                     }
@@ -190,7 +208,7 @@ export const useSessionStore = defineStore('session', () => {
                         status: 'calling'
                     })
                 } else if (event === 'tool_result') {
-                    isStreaming.value = true
+                    streamingMap.value[friendId] = true
                     const toolCalls = messagesMap.value[friendId][msgIndex].toolCalls
                     if (toolCalls) {
                         // Find the last one with the same name that is still 'calling'
@@ -207,7 +225,13 @@ export const useSessionStore = defineStore('session', () => {
                     if (data.message_id) {
                         messagesMap.value[friendId][msgIndex].id = data.message_id
                     }
-                    isStreaming.value = false
+                    streamingMap.value[friendId] = false
+
+                    // Check if user has switched away during streaming - mark as unread
+                    if (currentFriendId.value !== friendId) {
+                        unreadCounts.value[friendId] = (unreadCounts.value[friendId] || 0) + 1
+                    }
+
                     // 异步刷新会话列表统计
                     fetchFriendSessions(friendId)
                     // Update friend list preview for assistant message
@@ -223,7 +247,7 @@ export const useSessionStore = defineStore('session', () => {
                 messagesMap.value[friendId][msgIndex].content = 'Error: Failed to get response from AI.'
             }
         } finally {
-            isStreaming.value = false
+            streamingMap.value[friendId] = false
         }
     }
 
@@ -248,6 +272,7 @@ export const useSessionStore = defineStore('session', () => {
 
     return {
         currentFriendId,
+        unreadCounts,
         messagesMap,
         currentMessages,
         currentSessions,

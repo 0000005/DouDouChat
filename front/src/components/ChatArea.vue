@@ -111,7 +111,7 @@ const currentFriendDescription = computed(() => {
 // Check if a specific message is in loading state (assistant message with no content yet)
 const isMessageLoading = (msg: any, index: number) => {
   if (msg.role !== 'assistant') return false
-  if (status.value !== 'submitted' && status.value !== 'streaming') return false
+  if (status.value !== 'streaming') return false
   // Only the last message can be loading
   if (index !== messages.value.length - 1) return false
   // Loading if no content (showing loader even if thinking, to keep avatar company)
@@ -280,18 +280,14 @@ const formatToolArgs = (args: any) => {
         <Menu :size="20" />
       </button>
       <div class="header-drag-area" @dblclick="handleToggleMaximize">
-        <div 
-          v-if="sessionStore.currentFriendId" 
-          id="chat-title-area"
-          class="chat-title-container" 
-          @click="handleTitleClick"
-        >
+        <div v-if="sessionStore.currentFriendId" id="chat-title-area" class="chat-title-container"
+          @click="handleTitleClick">
 
           <h2 class="chat-title">{{ currentFriendName }}</h2>
-          
+
           <template v-if="currentFriendDescription">
             <span class="title-separator">|</span>
-            
+
             <TooltipProvider>
               <Tooltip :delay-duration="300">
                 <TooltipTrigger as-child>
@@ -354,7 +350,7 @@ const formatToolArgs = (args: any) => {
               <!-- Thinking Block (Assistant Only) - Placed above the message row -->
               <div v-if="msg.role === 'assistant' && msg.thinkingContent && sysShowThinking"
                 class="reasoning-external-container">
-                <Reasoning :is-streaming="status === 'submitted' && index === messages.length - 1"
+                <Reasoning :is-streaming="status === 'streaming' && index === messages.length - 1"
                   class="reasoning-block">
                   <ReasoningTrigger />
                   <ReasoningContent :content="msg.thinkingContent" />
@@ -430,7 +426,7 @@ const formatToolArgs = (args: any) => {
             </button>
           </div>
 
-          <PromptInputSubmit :status="status" :loading="status === 'submitted'" class="send-btn" />
+          <PromptInputSubmit :status="status" :loading="status === 'streaming'" class="send-btn" />
         </div>
       </PromptInput>
     </div>
@@ -470,7 +466,8 @@ const formatToolArgs = (args: any) => {
           <Button variant="ghost" @click="showNoLlmDialog = false">
             稍后再说
           </Button>
-          <Button type="button" variant="default" @click="handleGoToSettings" class="bg-emerald-600 hover:bg-emerald-700">
+          <Button type="button" variant="default" @click="handleGoToSettings"
+            class="bg-emerald-600 hover:bg-emerald-700">
             去配置
           </Button>
         </DialogFooter>
@@ -493,7 +490,8 @@ const formatToolArgs = (args: any) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px; /* Default padding for web mode */
+  padding: 0 16px;
+  /* Default padding for web mode */
   background: #f5f5f5;
   border-bottom: 1px solid #e5e5e5;
   user-select: none;
@@ -578,7 +576,9 @@ const formatToolArgs = (args: any) => {
 
 /* 窄屏适配：隐藏描述 */
 @media (max-width: 640px) {
-  .chat-description, .title-separator {
+
+  .chat-description,
+  .title-separator {
     display: none;
   }
 }
