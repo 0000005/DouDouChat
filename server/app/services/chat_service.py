@@ -597,6 +597,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
             logger.error(f"[Recall] Event recall failed: {e}")
 
     # 3.3 Construct final instructions and messages using root template
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     script_prompt = ""
     if friend and friend.script_expression:
         try:
@@ -614,6 +615,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         
         profile_content_block = f"\n\n【用户信息】\n{profile_data}" if profile_data else ""
         final_instructions = final_instructions.replace("{{user-profile}}", profile_content_block)
+        final_instructions = final_instructions.replace("{{current-time}}", current_time)
     except Exception as e:
         logger.error(f"Failed to load root_system_prompt template: {e}")
         final_instructions = persona_prompt
@@ -621,6 +623,9 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
             final_instructions = f"{final_instructions}\n\n{script_prompt}"
         if profile_data:
             final_instructions = f"{final_instructions}\n\n【用户信息】\n{profile_data}"
+        final_instructions = (
+            f"{final_instructions}\n\n【当前时间】\n{current_time}"
+        )
 
     agent_messages = []
     for m in history:

@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from agents import Agent, Runner, function_tool, set_default_openai_api, set_default_openai_client
@@ -164,8 +165,10 @@ class RecallService:
         set_default_openai_api("chat_completions")
 
         # 4. 初始化 RecallAgent
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         instructions = get_prompt("recall/recall_instructions.txt").format(
-            search_rounds=search_rounds
+            search_rounds=search_rounds,
+            current_time=current_time,
         ).strip()
 
         agent = Agent(
