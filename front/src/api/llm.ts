@@ -1,13 +1,13 @@
 import { withApiBase } from './base'
 
 export interface LLMConfig {
-  id: number
-  base_url: string | null
-  api_key: string | null
-  model_name: string | null
-  create_time: string
-  update_time: string
-  deleted: boolean
+  id?: number
+  base_url?: string | null
+  api_key?: string | null
+  model_name?: string | null
+  create_time?: string
+  update_time?: string
+  deleted?: boolean
 }
 
 export interface LLMConfigUpdate {

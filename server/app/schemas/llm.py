@@ -20,3 +20,12 @@ class LLMConfig(LLMConfigBase):
     deleted: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LLMConfigRead(LLMConfigBase):
+    id: Optional[int] = None
+    create_time: Optional[datetime] = None
+    update_time: Optional[datetime] = None
+    deleted: Optional[bool] = None
+
+    model_config = ConfigDict(from_attributes=True)
