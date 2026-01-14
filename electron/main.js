@@ -400,6 +400,36 @@ function registerIpcHandlers() {
       y: position?.y,
     })
   })
+
+  ipcMain.on('debug:toggle-devtools', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (win) {
+      if (win.webContents.isDevToolsOpened()) {
+        win.webContents.closeDevTools()
+      } else {
+        win.webContents.openDevTools()
+      }
+    }
+  })
+
+  ipcMain.on('shell:open-logs', async () => {
+    // Determine typical log directory based on platform or app conventions
+    // Generally in userData/logs or similar
+    // Note: Backend might be configured to write logs elsewhere, 
+    // but typically we want the Electron app's user data folder logs
+    const logDir = path.join(app.getPath('userData'), 'logs')
+    try {
+      // Create if not exists to avoid error opening it
+      if (!fs.existsSync(logDir)) {
+        // If logs subdir doesn't exist, try opening just userData
+        await shell.openPath(app.getPath('userData'))
+      } else {
+        await shell.openPath(logDir)
+      }
+    } catch (e) {
+      console.error('Failed to open logs dir:', e)
+    }
+  })
 }
 
 async function bootstrap() {

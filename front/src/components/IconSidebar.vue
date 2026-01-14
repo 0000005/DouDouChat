@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { getStaticUrl } from '@/api/base'
-import packageJson from '../../package.json'
+
 import {
   MessageCircle,
   LayoutGrid,
@@ -16,13 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import AboutDialog from './AboutDialog.vue'
 
 defineProps<{
   activeTab: 'chat' | 'gallery'
@@ -40,7 +34,7 @@ const settingsStore = useSettingsStore()
 
 const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/avataaars/svg?seed=doudou'
 
-const userAvatarUrl = computed(() => 
+const userAvatarUrl = computed(() =>
   getStaticUrl(settingsStore.userAvatar) || DEFAULT_AVATAR
 )
 
@@ -48,10 +42,7 @@ onMounted(() => {
   settingsStore.fetchUserSettings()
 })
 
-const appVersion = packageJson.version
-const githubUrl = 'https://github.com/0000005/WeChatAgent'
-const releaseUrl = `${githubUrl}/releases`
-const authorName = 'JerryYin'
+
 
 const handleOpenProfile = () => {
   isPopoverOpen.value = false
@@ -126,44 +117,7 @@ const navItems = [
     </div>
   </aside>
 
-  <Dialog v-model:open="isAboutOpen">
-    <DialogContent class="sm:max-w-[420px] p-0 overflow-hidden bg-[#f7f7f7] border-none shadow-2xl">
-      <DialogHeader class="px-5 py-4 bg-white border-b">
-        <DialogTitle class="text-base font-medium text-center">关于 WeAgentChat</DialogTitle>
-        <DialogDescription class="sr-only">版本信息与项目地址</DialogDescription>
-      </DialogHeader>
-      <div class="px-5 py-4 space-y-3 text-sm text-gray-700">
-        <div class="flex items-center justify-between">
-          <span class="text-gray-500">软件版本</span>
-          <span class="font-medium text-gray-900">v{{ appVersion }}</span>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="text-gray-500">版本更新</span>
-          <a
-            class="text-[#07c160] hover:underline"
-            :href="releaseUrl"
-            target="_blank"
-            rel="noreferrer">
-            查看更新
-          </a>
-        </div>
-        <div class="space-y-1">
-          <div class="text-gray-500">GitHub 地址（求 Star）</div>
-          <a
-            class="text-[#07c160] break-all hover:underline"
-            :href="githubUrl"
-            target="_blank"
-            rel="noreferrer">
-            {{ githubUrl }}
-          </a>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="text-gray-500">作者</span>
-          <span class="text-gray-900">{{ authorName }}</span>
-        </div>
-      </div>
-    </DialogContent>
-  </Dialog>
+  <AboutDialog v-model:open="isAboutOpen" />
 </template>
 
 <style scoped>

@@ -24,4 +24,10 @@ contextBridge.exposeInMainWorld('WeAgentChat', {
       return () => ipcRenderer.removeListener('window:state', listener)
     },
   },
+  debug: {
+    toggleDevTools: () => ipcRenderer.send('debug:toggle-devtools'),
+  },
+  shell: {
+    openLogs: () => ipcRenderer.send('shell:open-logs'),
+  },
 })
