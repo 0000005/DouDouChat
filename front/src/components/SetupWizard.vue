@@ -191,8 +191,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <Dialog :open="open"
-    @update:open="(val) => (isSaving || !isGenderInitialized) ? null : emit('update:open', val)">
+  <Dialog :open="open" @update:open="(val) => (isSaving || !isGenderInitialized) ? null : emit('update:open', val)">
     <DialogContent class="max-w-[500px] p-0 gap-0 overflow-hidden border-none shadow-2xl">
       <!-- Gradient Header Area -->
       <div class="h-32 bg-gradient-to-br from-green-600 to-emerald-700 p-8 flex items-end relative overflow-hidden">
@@ -270,7 +269,7 @@ onMounted(async () => {
             <label class="text-sm font-semibold text-gray-700">API Key</label>
             <Input v-model="llmStore.apiKey" type="password" placeholder="sk-..."
               class="border-gray-200 focus:ring-green-500" />
-            <p class="text-[10px] text-gray-400">目前仅支持 OpenAI 兼容接口 (DeepSeek, OpenAI, Groq 等)</p>
+            <p class="text-[10px] text-gray-400">目前仅支持 OpenAI 兼容接口</p>
           </div>
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">Base URL (可选)</label>
