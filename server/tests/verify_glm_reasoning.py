@@ -9,7 +9,7 @@ from openai.types.responses import ResponseTextDeltaEvent
 async def verify_reasoning():
     # 1. Setup API
     base_url = "https://api.z.ai/api/coding/paas/v4/"
-    api_key = "4dce12de026450fe6d485bdff7847cde.pVqEddmkBZjdBSs6"
+    api_key = "xx"
     model_name = "glm-4.7"
 
     print(f"Connecting to {base_url} with model {model_name}...")

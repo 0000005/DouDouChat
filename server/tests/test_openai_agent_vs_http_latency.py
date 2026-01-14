@@ -9,7 +9,7 @@ from openai import AsyncOpenAI
 
 BASE_URL = "https://api.z.ai/api/coding/paas/v4/"
 CHAT_COMPLETIONS_URL = "https://api.z.ai/api/coding/paas/v4/chat/completions"
-API_KEY = "4dce12de026450fe6d485bdff7847cde.pVqEddmkBZjdBSs6"
+API_KEY = "xx"
 MODEL_NAME = "glm-4.7"
 RUNS = 10
 
