@@ -231,7 +231,11 @@ const originalSetTab = (tab: string) => {
                         <div class="space-y-6">
                             <div>
                                 <h3 class="text-lg font-medium">向量化配置</h3>
-                                <p class="text-sm text-gray-500">配置 Embedding 模型 API 的参数。</p>
+                                <p class="text-sm text-gray-500 text-pretty">配置 Embedding 模型 API 的参数。</p>
+                                <p class="text-xs text-amber-600 mt-1.5 font-medium flex items-center gap-1">
+                                    <span class="inline-block w-1 h-1 rounded-full bg-amber-600"></span>
+                                    如果未正确配置向量化模型，记忆系统将无法正常工作
+                                </p>
                             </div>
 
                             <div class="space-y-4">

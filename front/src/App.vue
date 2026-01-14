@@ -139,7 +139,7 @@ const handleSetupComplete = () => {
       <!-- Main Chat Area -->
       <main class="chat-container">
         <FriendGallery v-if="activeTab === 'gallery'" @back-chat="updateActiveTab('chat')" />
-        <ChatArea v-else :is-sidebar-collapsed="!isSidebarOpen" @toggle-sidebar="toggleSidebar" @open-drawer="isDrawerOpen = true" @edit-friend="handleEditFriend" />
+        <ChatArea v-else :is-sidebar-collapsed="!isSidebarOpen" @toggle-sidebar="toggleSidebar" @open-drawer="isDrawerOpen = true" @edit-friend="handleEditFriend" @open-settings="isSettingsOpen = true" />
       </main>
 
 

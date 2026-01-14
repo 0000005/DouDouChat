@@ -38,6 +38,18 @@ import {
   TooltipProvider,
   TooltipTrigger
 } from '@/components/ui/tooltip'
+import { useLlmStore } from '@/stores/llm'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { AlertTriangle } from 'lucide-vue-next'
+import { onMounted } from 'vue'
 
 
 const props = defineProps({
@@ -47,13 +59,36 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['toggle-sidebar', 'open-drawer', 'edit-friend'])
+const emit = defineEmits(['toggle-sidebar', 'open-drawer', 'edit-friend', 'open-settings'])
 
 const { messages, input, status, isThinkingMode, toggleThinkingMode, handleSubmit } = useChat()
 
 const sessionStore = useSessionStore()
 const friendStore = useFriendStore()
 const settingsStore = useSettingsStore()
+const llmStore = useLlmStore()
+
+onMounted(async () => {
+  // Ensure LLM config is loaded to check isConfigured status
+  if (!llmStore.apiKey) {
+    await llmStore.fetchConfig()
+  }
+})
+
+const showNoLlmDialog = ref(false)
+
+const checkLlmConfigAndSubmit = (e?: any) => {
+  if (!llmStore.isConfigured) {
+    showNoLlmDialog.value = true
+    return
+  }
+  handleSubmit(e)
+}
+
+const handleGoToSettings = () => {
+  showNoLlmDialog.value = false
+  emit('open-settings')
+}
 
 // System settings for display
 const { showThinking: sysShowThinking, showToolCalls: sysShowToolCalls } = storeToRefs(settingsStore)
@@ -384,7 +419,7 @@ const formatToolArgs = (args: any) => {
         </button>
       </div>
 
-      <PromptInput class="input-box" @submit="handleSubmit">
+      <PromptInput class="input-box" @submit="checkLlmConfigAndSubmit">
         <PromptInputTextarea v-model="input" placeholder="输入消息..." class="input-textarea" />
         <div class="input-footer">
           <div class="footer-left">
@@ -413,6 +448,34 @@ const formatToolArgs = (args: any) => {
       Electron 模式下由 App.vue 中的 ChatDrawerMenu 处理
     -->
     <ChatDrawerMenu v-if="!isElectron" v-model:open="drawerOpen" />
+
+    <!-- LLM Not Configured Dialog -->
+    <Dialog v-model:open="showNoLlmDialog">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 bg-amber-100 rounded-full">
+              <AlertTriangle class="h-6 w-6 text-amber-600" />
+            </div>
+            <DialogTitle>未配置 AI 模型</DialogTitle>
+          </div>
+          <DialogDescription class="text-base">
+            发送消息需要先配置大语言模型（LLM）。目前检测到您尚未设置 API Key 或接口地址。
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 text-sm text-gray-500 bg-gray-50 p-4 rounded-md border border-gray-100">
+          请前往“设置 -> LLM 设置”中完成配置，配置完成后即可开始对话。
+        </div>
+        <DialogFooter class="sm:justify-end gap-2">
+          <Button variant="ghost" @click="showNoLlmDialog = false">
+            稍后再说
+          </Button>
+          <Button type="button" variant="default" @click="handleGoToSettings" class="bg-emerald-600 hover:bg-emerald-700">
+            去配置
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 

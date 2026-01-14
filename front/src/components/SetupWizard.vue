@@ -15,16 +15,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader } from '@/components/ai-elements/loader'
-import { 
-  Rocket, 
-  Settings2, 
-  BrainCircuit, 
-  CheckCircle2, 
-  ChevronRight, 
+import {
+  Rocket,
+  Settings2,
+  BrainCircuit,
+  CheckCircle2,
+  ChevronRight,
   ChevronLeft,
   Sparkles,
   ShieldCheck,
-  Zap
+  Zap,
+  AlertCircle
 } from 'lucide-vue-next'
 import { useLlmStore } from '@/stores/llm'
 import { useEmbeddingStore } from '@/stores/embedding'
@@ -94,7 +95,7 @@ const completeSetup = async () => {
     // Save both configs
     await llmStore.saveConfig()
     await embeddingStore.saveConfig()
-    
+
     toast.success('配置已保存，欢迎使用 WeAgentChat！')
     emit('complete')
     emit('update:open', false)
@@ -129,23 +130,23 @@ onMounted(async () => {
       <div class="h-32 bg-gradient-to-br from-green-600 to-emerald-700 p-8 flex items-end relative overflow-hidden">
         <div class="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
         <div class="absolute top-4 right-4 text-white/20">
-            <Zap v-if="step === 1" class="w-16 h-16" />
-            <BrainCircuit v-if="step === 2" class="w-16 h-16" />
-            <Settings2 v-if="step === 3" class="w-16 h-16" />
-            <CheckCircle2 v-if="step === 4" class="w-16 h-16" />
+          <Zap v-if="step === 1" class="w-16 h-16" />
+          <BrainCircuit v-if="step === 2" class="w-16 h-16" />
+          <Settings2 v-if="step === 3" class="w-16 h-16" />
+          <CheckCircle2 v-if="step === 4" class="w-16 h-16" />
         </div>
         <div class="z-10">
           <h2 class="text-2xl font-bold text-white leading-tight">
-            {{ step === 1 ? '欢迎使用 WeAgentChat' : 
-               step === 2 ? '配置对话大模型 (LLM)' :
-               step === 3 ? '配置向量模型 (Embedding)' :
-               '一切准备就绪' }}
+            {{ step === 1 ? '欢迎使用 WeAgentChat' :
+              step === 2 ? '配置对话大模型 (LLM)' :
+                step === 3 ? '配置向量模型 (Embedding)' :
+                  '一切准备就绪' }}
           </h2>
           <p class="text-green-100 text-sm mt-1 opacity-90">
-             {{ step === 1 ? '您的私人 AI 社交沙盒' : 
-                step === 2 ? '这是 AI 伙伴的大脑，用于日常对话' :
+            {{ step === 1 ? '您的私人 AI 社交沙盒' :
+              step === 2 ? '这是 AI 伙伴的大脑，用于日常对话' :
                 step === 3 ? '这是 AI 伙伴的记忆系统，用于存取历史信息' :
-                '开启您的第一个 AI 社交实验' }}
+                  '开启您的第一个 AI 社交实验' }}
           </p>
         </div>
       </div>
@@ -155,7 +156,8 @@ onMounted(async () => {
         <!-- Step 1: Welcome -->
         <div v-if="step === 1" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div class="flex items-start gap-4 p-4 rounded-xl bg-green-50/50 border border-green-100">
-            <div class="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+            <div
+              class="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center text-white shrink-0 shadow-sm">
               <ShieldCheck class="w-6 h-6" />
             </div>
             <div>
@@ -164,8 +166,9 @@ onMounted(async () => {
             </div>
           </div>
           <div class="flex items-start gap-4 p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
-            <div class="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center text-white shrink-0 shadow-sm">
-                <Sparkles class="w-6 h-6" />
+            <div
+              class="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+              <Sparkles class="w-6 h-6" />
             </div>
             <div>
               <h4 class="font-bold text-gray-900">双轨记忆系统</h4>
@@ -179,7 +182,8 @@ onMounted(async () => {
         <div v-if="step === 2" class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">API Key</label>
-            <Input v-model="llmStore.apiKey" type="password" placeholder="sk-..." class="border-gray-200 focus:ring-green-500" />
+            <Input v-model="llmStore.apiKey" type="password" placeholder="sk-..."
+              class="border-gray-200 focus:ring-green-500" />
             <p class="text-[10px] text-gray-400">目前仅支持 OpenAI 兼容接口 (DeepSeek, OpenAI, Groq 等)</p>
           </div>
           <div class="space-y-2">
@@ -192,7 +196,8 @@ onMounted(async () => {
             <Input v-model="llmStore.modelName" placeholder="gpt-4o-mini" class="border-gray-200" />
           </div>
           <div class="pt-2">
-            <Button variant="outline" size="sm" @click="testLlm" :disabled="isTesting || !llmStore.apiKey" class="w-full text-xs h-9 border-dashed border-gray-300 hover:border-green-500 hover:text-green-600 transition-colors">
+            <Button variant="outline" size="sm" @click="testLlm" :disabled="isTesting || !llmStore.apiKey"
+              class="w-full text-xs h-9 border-dashed border-gray-300 hover:border-green-500 hover:text-green-600 transition-colors">
               <Loader v-if="isTesting" class="mr-2 h-3 w-3" />
               <Zap v-else class="mr-2 h-3 w-3" />
               {{ isTesting ? '正在测试连接...' : '测试连接' }}
@@ -202,6 +207,10 @@ onMounted(async () => {
 
         <!-- Step 3: Embedding Config -->
         <div v-if="step === 3" class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div class="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-100 text-amber-800">
+            <AlertCircle class="w-4 h-4 mt-0.5 shrink-0" />
+            <p class="text-xs font-medium leading-normal">如果未正确配置向量化模型，记忆系统将无法正常工作。</p>
+          </div>
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">Provider 服务商</label>
             <Select v-model="embeddingStore.provider">
@@ -234,7 +243,8 @@ onMounted(async () => {
             </div>
           </div>
           <div class="pt-2">
-            <Button variant="outline" size="sm" @click="testEmbedding" :disabled="isTesting || !embeddingStore.apiKey" class="w-full text-xs h-9 border-dashed border-gray-300 hover:border-green-500 hover:text-green-600 transition-colors">
+            <Button variant="outline" size="sm" @click="testEmbedding" :disabled="isTesting || !embeddingStore.apiKey"
+              class="w-full text-xs h-9 border-dashed border-gray-300 hover:border-green-500 hover:text-green-600 transition-colors">
               <Loader v-if="isTesting" class="mr-2 h-3 w-3" />
               <Zap v-else class="mr-2 h-3 w-3" />
               {{ isTesting ? '正在测试连接...' : '测试连接' }}
@@ -243,7 +253,8 @@ onMounted(async () => {
         </div>
 
         <!-- Step 4: Success -->
-        <div v-if="step === 4" class="flex flex-col items-center justify-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
+        <div v-if="step === 4"
+          class="flex flex-col items-center justify-center space-y-6 pt-4 animate-in zoom-in-95 duration-500">
           <div class="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center text-green-600 shadow-inner">
             <Rocket class="w-12 h-12" />
           </div>
@@ -254,32 +265,40 @@ onMounted(async () => {
             </p>
           </div>
           <div class="w-full space-y-3">
-             <div class="flex items-center justify-between text-xs text-gray-500 px-2">
-                <span class="flex items-center"><CheckCircle2 class="w-3 h-3 text-green-500 mr-1" /> LLM 对话模型</span>
-                <span class="font-mono">{{ llmStore.modelName }}</span>
-             </div>
-             <div class="flex items-center justify-between text-xs text-gray-500 px-2">
-                <span class="flex items-center"><CheckCircle2 class="w-3 h-3 text-green-500 mr-1" /> Embedding 记忆模型</span>
-                <span class="font-mono">{{ embeddingStore.model }}</span>
-             </div>
+            <div class="flex items-center justify-between text-xs text-gray-500 px-2">
+              <span class="flex items-center">
+                <CheckCircle2 class="w-3 h-3 text-green-500 mr-1" /> LLM 对话模型
+              </span>
+              <span class="font-mono">{{ llmStore.modelName }}</span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-500 px-2">
+              <span class="flex items-center">
+                <CheckCircle2 class="w-3 h-3 text-green-500 mr-1" /> Embedding 记忆模型
+              </span>
+              <span class="font-mono">{{ embeddingStore.model }}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Footer Buttons -->
-      <DialogFooter class="p-6 pt-0 flex flex-row items-center justify-between gap-3 bg-gray-50/50 border-t border-gray-100">
+      <DialogFooter
+        class="p-6 pt-0 flex flex-row items-center justify-between gap-3 bg-gray-50/50 border-t border-gray-100">
         <div>
           <Button v-if="step > 1" variant="ghost" size="sm" @click="prevStep" class="text-gray-500">
             <ChevronLeft class="mr-1 w-4 h-4" /> 上一步
           </Button>
         </div>
         <div class="space-x-2">
-          <Button v-if="step < 4" :disabled="!canGoNext" @click="nextStep" class="bg-gray-900 hover:bg-black text-white px-6 h-10">
-            下一步 <ChevronRight class="ml-1 w-4 h-4" />
+          <Button v-if="step < 4" :disabled="!canGoNext" @click="nextStep"
+            class="bg-gray-900 hover:bg-black text-white px-6 h-10">
+            下一步
+            <ChevronRight class="ml-1 w-4 h-4" />
           </Button>
-          <Button v-else :disabled="isSaving" @click="completeSetup" class="bg-green-600 hover:bg-green-700 text-white px-10 h-10 shadow-lg shadow-green-100 font-bold transition-all hover:scale-105 active:scale-95">
-             <Loader v-if="isSaving" class="mr-2 h-4 w-4" />
-             开启 AI 社交之旅
+          <Button v-else :disabled="isSaving" @click="completeSetup"
+            class="bg-green-600 hover:bg-green-700 text-white px-10 h-10 shadow-lg shadow-green-100 font-bold transition-all hover:scale-105 active:scale-95">
+            <Loader v-if="isSaving" class="mr-2 h-4 w-4" />
+            开启 AI 社交之旅
           </Button>
         </div>
       </DialogFooter>
@@ -290,7 +309,14 @@ onMounted(async () => {
 <style scoped>
 /* Any custom animations */
 @keyframes slide-up {
-  from { transform: translateY(10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 </style>

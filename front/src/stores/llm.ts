@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { getLlmConfig, updateLlmConfig, testLlmConfig, type LLMConfigUpdate, type LLMTestResult } from '@/api/llm'
 
 export const useLlmStore = defineStore('llm', () => {
@@ -71,6 +71,10 @@ export const useLlmStore = defineStore('llm', () => {
     }
   }
 
+  const isConfigured = computed(() => {
+    return !!apiKey.value && apiKey.value.trim().length > 0
+  })
+
   return {
     apiBaseUrl,
     apiKey,
@@ -79,6 +83,7 @@ export const useLlmStore = defineStore('llm', () => {
     isTesting,
     error,
     testResult,
+    isConfigured,
     fetchConfig,
     saveConfig,
     testConfig
