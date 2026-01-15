@@ -144,12 +144,16 @@ def get_message_name(message: OpenAICompatibleMessage):
 def get_blob_str(blob: Blob):
     match blob.type:
         case BlobType.chat:
-            return "\n".join(
-                [
-                    f"[{get_message_timestamp(m, blob.created_at)}] {get_message_name(m)}: {m.content}"
-                    for m in cast(ChatBlob, blob).messages
-                ]
-            )
+            lines = []
+            for m in cast(ChatBlob, blob).messages:
+                timestamp = get_message_timestamp(m, blob.created_at)
+                name = get_message_name(m)
+                content = m.content
+                # 给 assistant 的消息加上显式标注，防止 LLM 误提取 AI 的事实
+                if m.role == "assistant":
+                    content = f"{content} 【AI发言，仅供参考，不记录】"
+                lines.append(f"[{timestamp}] {name}: {content}")
+            return "\n".join(lines)
         case BlobType.doc:
             return cast(DocBlob, blob).content
         case BlobType.summary:

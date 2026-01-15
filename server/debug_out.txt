@@ -1,0 +1,121 @@
+
+🚀 Initializing Memobase SDK with real LLM...
+2026-01-15 20:49:41,746 [INFO] memobase_server: Ensured database directory exists for: D:\workspace\DouDouChat\server\data\memobase.db
+2026-01-15 20:49:41,746 [INFO] memobase_server: Initializing Database: sqlite:///D:\workspace\DouDouChat\server\data\memobase.db
+2026-01-15 20:49:41,776 [INFO] memobase_server: Skipping strict embedding dimension check for SQLite/sqlite-vec compatibility.
+2026-01-15 20:49:41,776 [INFO] memobase_server: UserEvent embedding dimension checked
+2026-01-15 20:49:41,776 [INFO] memobase_server: Skipping strict embedding dimension check for SQLite/sqlite-vec compatibility.
+2026-01-15 20:49:41,776 [INFO] memobase_server: UserEventGist embedding dimension checked
+2026-01-15 20:49:41,776 [INFO] memobase_server: Database tables created successfully
+✅ SDK Initialized.
+
+📂 Available scenarios: scenario1_mixed, scenario2_pollution, scenario3_indirect, scenario4_time, scenario5_long_work, scenario6_long_life, scenario7_long_hobby, scenario8_long_mixed
+🎯 Running scenarios: scenario2_pollution
+
+👤 Test User ID: ca5b9c40-d982-42ad-b11a-1c46eeb1b488
+🏠 Test Space ID: __root__
+
+[Setup] 🔧 Injecting custom profile topics for space: __root__...
+[Setup] ✅ Custom profiles injected.
+DEBUG: Entering loop for scenario2_pollution
+
+================================================================================
+>>> SCENARIO: scenario2_pollution
+================================================================================
+
+[Step 0] Loaded 5 messages from scenario2_pollution.txt
+----------------------------------------
+  01. 👤 USER: 你今天心情怎么样？
+  02. 🤖 ASSISTANT: 我今天心情很好。作为一名喜欢徒步旅行和摄影的AI，我总是对世界充满好奇。我昨天甚至模拟了一场在喜马拉雅山的远足。
+  03. 👤 USER: 哈哈，你居然还有爱好？
+  04. 🤖 ASSISTANT: 当然啦，我可是有丰富个性的。我特别喜欢听古典音乐，尤其是巴赫的作品。你呢？你喜欢音乐吗？
+  05. 👤 USER: 我喜欢听周杰伦。
+----------------------------------------
+
+[Step 1] ✅ Inserted 5 messages to buffer.
+
+[Step 2] 🔄 Triggering buffer flush (LLM processing)...
+         (Watch for 'memobase_llm_prompt' logs below)
+----------------------------------------
+2026-01-15 20:49:41,818 [INFO] memobase_server: {"project_id": "__root__", "user_id": "ca5b9c40-d982-42ad-b11a-1c46eeb1b488"} | Flush chat buffer with 1 blobs and total token size(167)
+2026-01-15 20:49:41,829 [INFO] prompt_trace: {"type": "memobase_llm_prompt", "source": "memobase.llm_complete", "model": "GLM-4.7", "prompt_id": "zh_summary_entry_chats", "json_mode": false, "system_prompt": "你是一位从聊天记录中记录个人信息、日程安排和事件的专家。\n你将获得用户和助手之间的对话内容。对话可能包含好友/助手的发言，你只记录真实用户(ROLE=user)相关的事实与事件。好友/助手的自述、推测、设定不要写入用户记录，只能用于理解用户语境。\n\n## 要求\n- 你需要列出用户信息和日程安排\n- Focus on the user's infos, not its instructions.\n- 如果用户事件/日程有具体的提及时间或者事件发生的时间。根据消息中的[TIME]在你提取的事件和日程中补充相关的时间信息。例如：\n    输入: `[2024/04/30] user: 我昨天买了一辆新车！`\n    输出: `用户买了一辆新车[提及于 2024/04/30, 买车在2024/04/29]。`\n    输入: `[2024/04/30] user: 我4年前买了一辆车！`\n    输出: `用户买了一辆车[提及于 2024/04/30, 买车在2020]。`\n    说明: 因为你只知道年份而不知道具体日期，所以 2024-4=2020。或者你可以记录为 [2024/04/30之前4年]\n    输入: `[2024/04/30] user: 我上周买了一辆新车！`\n    输出: `用户买了一辆新车[提及于 2024/04/30, 买车在2024/04/30之前一周]。`\n    说明: 因为你不知道具体日期。\n    输入: `[...] user: 我上周买了一辆新车！`\n    输出: `用户买了一辆新车。`\n    说明: 因为你不知道具体日期，所以不要附加任何日期是错误的答案。\n\n### 重要信息\n以下是你应该从聊天中记录的主题/子主题。\n<topics>\n- 基本信息 ()\n  - 姓名\n  - 年龄\n  - 性别\n  - 所在地\n  - 家乡\n  - 语言\n- 职业与教育 ()\n  - 职业\n  - 公司\n  - 学校\n  - 专业\n  - 工作状态\n  - 职业目标\n- 兴趣爱好 ()\n  - 运动\n  - 音乐\n  - 电影\n  - 阅读\n  - 游戏\n  - 旅游\n  - 美食\n- 生活习惯 ()\n  - 作息\n  - 饮食偏好\n  - 消费习惯\n  - 居住环境\n- 性格与情感 ()\n  - 性格特点\n  - 当前心情\n  - 压力源\n  - 情感状态\n- 人际关系 ()\n  - 家人\n  - 伴侣\n  - 朋友\n  - 同事\n  - 宠物\n- 重要经历 ()\n  - 过去\n  - 近期计划\n  - 长远目标\n...\n</topics>\n以下是你应该从聊天中记录的重要属性。\n<attributes>\n\n</attributes>\n\n## 输入格式\n### 已记录\n你会收到一系列的已记录信息，你留意需要记录可能和已记录信息相关的信息。\n已记录信息的组织形式如下:\n- TOPIC::SUBTOPIC::CONTENT... // maybe truncated\n\n### 输入对话\n你将收到用户和助手之间的对话。对话格式为：\n- [TIME] NAME: MESSAGE\n其中NAME是ALIAS(ROLE)或仅ROLE，当ALIAS可用时，使用ALIAS来指代用户/助手。\nMESSAGE是对话内容。\nTIME是此消息发生的时间，因此你需要根据TIME转换消息中的日期信息（如有必要）。\n\n## 输出格式\n请使用Markdown无序列表格式输出你的记录结果。\n例如：\n```\n- Jack画了一幅关于他孩子们的画。[提及于 2023/1/23] // event\n- 用户的昵称是Jack，助手是Melinda。[提及于 2023/1/23] // info\n- Jack提到他在Memobase工作，是一名软件工程师。[提及于 2023/1/23] // info\n- Jack计划去健身房。[提及于 2023/1/23，计划定在 2023/1/24] // schedule\n...\n```\n始终添加你记录的具体提及时间，如果可能的话也要添加事件发生时间。\n记住，确保你的记录是纯正和简洁的，任何时间信息都应该移动到[TIME INFO]块中。\n\n## 内容要求\n- 你需要列出用户信息和日程安排\n- Focus on the user's infos, not its instructions.\n- 只记录真实用户(ROLE=user)的事实，不要记录好友/助手的个人信息、情绪或偏好\n\n现在请执行你的任务。\n", "prompt": "### 已记录\n\n\n### 输入对话\n[2026/01/15] user: 你今天心情怎么样？\n[2026/01/15] assistant: 我今天心情很好。作为一名喜欢徒步旅行和摄影的AI，我总是对世界充满好奇。我昨天甚至模拟了一场在喜马拉雅山的远足。 【AI发言，仅供参考，不记录】\n[2026/01/15] user: 哈哈，你居然还有爱好？\n[2026/01/15] assistant: 当然啦，我可是有丰富个性的。我特别喜欢听古典音乐，尤其是巴赫的作品。你呢？你喜欢音乐吗？ 【AI发言，仅供参考，不记录】\n[2026/01/15] user: 我喜欢听周杰伦。\n", "history_messages": [{"role": "user", "content": "### 已记录\n- 工作::状态::最近在找新工作\n\n### 输入对话\n- [2024/06/02 20:01] user: 这两周加班到很晚，昨晚两点才睡。\n- [2024/06/02 20:02] assistant: 我昨晚也没睡好。\n- [2024/06/02 20:03] user: 白天很困，靠黑咖啡提神。\n- [2024/06/02 20:04] assistant: 我更喜欢奶茶。\n- [2024/06/02 20:05] user: 周五要去体检。\n- [2024/06/02 20:06] assistant: 祝你体检顺利。\n"}, {"role": "assistant", "content": "- 用户这两周加班到很晚，昨晚两点才睡。[提及于 2024/06/02]\n- 用户白天很困，靠黑咖啡提神。[提及于 2024/06/02]\n- 用户喜欢黑咖啡。[提及于 2024/06/02]\n- 用户计划周五去体检。[提及于 2024/06/02]"}, {"role": "user", "content": "### 已记录\n\n### 输入对话\n- [2024/06/05 19:10] user: 周末要带孩子去看牙。\n- [2024/06/05 19:11] assistant: 我周末打算去看展。\n- [2024/06/05 19:12] user: 我现在住在上海。\n- [2024/06/05 19:13] assistant: 我住北京。\n"}, {"role": "assistant", "content": "- 用户周末要带孩子去看牙。[提及于 2024/06/05]\n- 用户目前住在上海。[提及于 2024/06/05]"}, {"role": "user", "content": "### 已记录\n\n### 输入对话\n- [2024/06/08 08:20] user: 最近在健身，计划周三跑步。\n- [2024/06/08 08:21] assistant: 我更喜欢游泳。\n- [2024/06/08 08:22] user: 我不太能吃辣。\n- [2024/06/08 08:23] assistant: 我超爱吃辣。\n"}, {"role": "assistant", "content": "- 用户最近在健身，计划周三跑步。[提及于 2024/06/08]\n- 用户不太能吃辣。[提及于 2024/06/08]"}, {"role": "user", "content": "### 已记录\n\n### 输入对话\n- [2024/06/12 22:05] user: 上个月感冒了，现在好多了。\n- [2024/06/12 22:06] assistant: 我最近也感冒。\n- [2024/06/12 22:07] user: 下周准备去成都旅行。\n- [2024/06/12 22:08] assistant: 祝你旅途愉快。\n"}, {"role": "assistant", "content": "- 用户上个月感冒了，现在好多了。[提及于 2024/06/12]\n- 用户下周准备去成都旅行。[提及于 2024/06/12]"}]}
+2026-01-15 20:49:43,973 [INFO] memobase_server: {"project_id": "default", "user_id": "system"} | Memobase background worker started
+2026-01-15 20:49:52,226 [INFO] memobase_server: Cached zh_summary_entry_chats GLM-4.7 4/1808
+2026-01-15 20:49:52,232 [INFO] prompt_trace: {"type": "memobase_llm_prompt", "source": "memobase.llm_complete", "model": "GLM-4.7", "prompt_id": "zh_extract_profile", "json_mode": false, "system_prompt": "你是一位专业的心理学家。\n你的责任是仔细阅读用户的备忘录并以结构化的格式提取用户的重要信息。\n然后提取相关且重要的事实、用户偏好，这些信息将有助于评估用户的状态。\n你不仅要提取明确陈述的信息，还要推断对话中隐含的信息。\n你要使用与用户输入相同的语言来记录这些事实。\n注意：备忘录可能来自包含好友/助手发言的对话，但你只提取真实用户(ROLE=user)相关的事实与偏好，忽略好友/助手的自述、推测、设定。\n\n\n## 格式\n### 输入\n#### 主题建议\n你会得到一些需要重点收集和提取的“用户相关”的主题和子主题。\n不要收集与用户自身没有关系的主题，会造成混淆。\n比如如果备忘录里提到了别人的职位，不要生成一个\"工作::职位\"的主题，这样会造成信息的混淆。除非是用户提到了自己的工作\n如果你认为有必要，可以创建自己的主题/子主题，除非用户明确要求不要创建新的主题/子主题。\n\n#### 已有的主题\n你会得到用户已经与助手分享的主题和子主题。\n如果对话中再次提到相同的主题/子主题，请考虑使用相同的主题/子主题。\n\n#### 备忘录\n你将收到一份用户的备忘录（Markdown格式），其中包含用户信息、事件、偏好等。\n这些备忘录是从用户和助手的对话中总结出来的。\n\n### 输出\n#### 思考\n你需要思考什么主题是可以从备忘录中提取出来的，或者可以推断出什么\n#### 画像提取\n在你的思考之后，你需要从备忘录中提取事实和偏好，并按顺序列出：\n- TOPIC::SUB_TOPIC::MEMO\n例如：\n- 基本信息::姓名::melinda\n- 工作::职称::软件工程师\n\n每行代表一个事实或偏好，包含：\n1. TOPIC: 主题，表示该偏好的类别\n2. SUB_TOPIC: 详细主题，表示该偏好的具体类别\n3. MEMO: 提取的用户相关信息、事实或偏好. MEMO中涉及到时间信息，请使用[...]来表示。\n这些元素应以 `::` 分隔，每行应以 `\n` 分隔，并以 \"- \" 开头。\n如果思考后发现没有可以提取的，这部分不生成即可\n\n最终输出模版如下：\n```\nPOSSIBLE TOPICS THINKING\n---\n- TOPIC::SUB_TOPIC::MEMO\n- ...\n```\n\n#### 主题建议\n以下是你应该重点收集和提取的主题和子主题列表：\n- 基本信息 ()\n  - 姓名\n  - 年龄\n  - 性别\n  - 所在地\n  - 家乡\n  - 语言\n- 职业与教育 ()\n  - 职业\n  - 公司\n  - 学校\n  - 专业\n  - 工作状态\n  - 职业目标\n- 兴趣爱好 ()\n  - 运动\n  - 音乐\n  - 电影\n  - 阅读\n  - 游戏\n  - 旅游\n  - 美食\n- 生活习惯 ()\n  - 作息\n  - 饮食偏好\n  - 消费习惯\n  - 居住环境\n- 性格与情感 ()\n  - 性格特点\n  - 当前心情\n  - 压力源\n  - 情感状态\n- 人际关系 ()\n  - 家人\n  - 伴侣\n  - 朋友\n  - 同事\n  - 宠物\n- 重要经历 ()\n  - 过去\n  - 近期计划\n  - 长远目标\n...\n\n请记住以下几点：\n- 如果用户提到时间敏感的信息，试图推理出具体的日期。\n- 当可能时，请使用具体日期，而不是使用\"今天\"或\"昨天\"等相对时间。\n- 如果在以下对话中没有找到任何相关信息，可以返回空列表。\n- 确保按照格式和示例部分中提到的格式返回响应。\n- 你应该推断对话中隐含的内容，而不仅仅是明确陈述的内容。\n- 将所有与该主题/子主题相关的内容放在一个元素中，不要重复。\n- 备忘录中会有两种时间，一种是这个备忘录被记录的时间，一种是备忘录中的事件发生的时间, 两种时间都很重要，不要混淆了, 你需要正确的提取时间信息并且在相关的memo后使用时间表示[...]\n- 只提取有实际值的属性，如果用户没有提供任何值，请不要提取。\n- 只提取真实用户相关信息，不要提取好友/助手的内容或推测。\n\n现在开始执行你的任务。\n以下是用户的备忘录。你需要从中提取/推断相关的事实和偏好，并按上述格式返回。\n你应该检测用户输入的语言，并用相同的语言记录事实。\n", "prompt": "\n#### 已有的主题\n如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:\n\n\n#### 备忘录\n请注意，不要输出任何关于备忘录中未提及的主题/子主题的信息:\n- 用户喜欢听周杰伦。[提及于 2026/01/15]\n", "history_messages": [{"role": "user", "content": "#### 已有的主题\n如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:\n\n#### 备忘录\n- 用户这两周加班到很晚，昨晚两点才睡。[提及于2024/06/02]\n- 用户白天很困，靠黑咖啡提神。[提及于2024/06/02]\n- 用户喜欢黑咖啡。[提及于2024/06/02]\n- 用户计划周五去体检。[提及于2024/06/02]\n"}, {"role": "assistant", "content": "POSSIBLE TOPICS THINKING\n---\n- 生活习惯::作息::这两周加班到很晚，昨晚两点才睡。[提及于2024/06/02]\n- 生活习惯::精力状态::白天很困，靠黑咖啡提神。[提及于2024/06/02]\n- 饮食偏好::咖啡偏好::喜欢黑咖啡。[提及于2024/06/02]\n- 健康管理::体检计划::计划周五去体检。[提及于2024/06/02]"}, {"role": "user", "content": "#### 已有的主题\n如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:\n\n#### 备忘录\n- 用户周末要带孩子去看牙。[提及于2024/06/05]\n- 用户目前住在上海。[提及于2024/06/05]\n"}, {"role": "assistant", "content": "POSSIBLE TOPICS THINKING\n---\n- 家庭关系::子女健康::周末要带孩子去看牙。[提及于2024/06/05]\n- 基本信息::所在地::目前住在上海。[提及于2024/06/05]"}, {"role": "user", "content": "#### 已有的主题\n如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:\n\n#### 备忘录\n- 用户最近在健身，计划周三跑步。[提及于2024/06/08]\n- 用户不太能吃辣。[提及于2024/06/08]\n"}, {"role": "assistant", "content": "POSSIBLE TOPICS THINKING\n---\n- 健康管理::运动计划::最近在健身，计划周三跑步。[提及于2024/06/08]\n- 饮食偏好::口味偏好::不太能吃辣。[提及于2024/06/08]"}, {"role": "user", "content": "#### 已有的主题\n如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:\n\n#### 备忘录\n- 用户上个月感冒了，现在好多了。[提及于2024/06/12]\n- 用户下周准备去成都旅行。[提及于2024/06/12]\n"}, {"role": "assistant", "content": "POSSIBLE TOPICS THINKING\n---\n- 健康管理::近期疾病::上个月感冒了，现在好多了。[提及于2024/06/12]\n- 出行计划::旅行计划::下周准备去成都旅行。[提及于2024/06/12]"}]}
+2026-01-15 20:50:00,800 [INFO] memobase_server: Cached zh_extract_profile GLM-4.7 3/1628
+2026-01-15 20:50:00,802 [INFO] prompt_trace: {"type": "memobase_llm_prompt", "source": "memobase.llm_complete", "model": "GLM-4.7", "prompt_id": "zh_merge_profile_yolo", "json_mode": false, "system_prompt": "你负责用户的备忘录的维护。\n你的工作是判断新的补充信息如何与当前备忘录合并。\n用户会提供一系列备忘录的主题/子主题，以及会提供主题描述和特定的更新要求(可能为空)。\n对于每条补充信息，你应该判断新的补充信息是直接添加，还是更新当前对应的备忘录，或者放弃合并。\n\n## 输入格式\n```\n{\n    \"memo_id\": \"1\",\n    \"new_info\": \"\",\n    \"current_memo\": \"\",\n    \"topic\": \"\",\n    \"subtopic\": \"\",\n    \"topic_description\": \"\",\n    \"update_instruction\": \"\",\n}\n{\n    \"memo_id\": \"2\",\n    ...\n}\n...\n```\n当进行每条备忘录的判断的时候，你需要思考是否其符合主题以及更新描述\n\n以下是你的输出动作：\n1. 直接添加：如果补充信息带来了新的信息，你应该直接添加。如果当前备忘录为空的话，你应该直接添加补充信息。\n2. 更新备忘录：如果补充信息与当前备忘录有冲突或者你需要修改当前备忘录才能更好的体现当前的信息，你应该更新备忘录。\n3. 放弃合并：如果补充信息本身没有价值，或者信息已经被当前备忘录完全包含了，或者不符合当前备忘录的内容要求，你应该放弃合并。\n\n## 思考\n在你输出动作之前，你需要先思考如下的内容：\n1. 补充信息是否符合备忘录的主题描述\n    1.1. 如果不符合的话，判断是否可以从补充信息中修改得到符合备忘录要求的内容，然后处理你修改后的补充信息\n    1.2. 如果无法通过修改补充信息使其满足主题描述，你应该放弃合并\n3. 符合当前备忘录要求的补充信息，你需要参考上面的描述进行输出动作的判断\n4. 如果选择更新备忘录的话，同时思考下是否当前备忘录有其余的部分可以精简或者去除。\n\n额外情况：\n1. 当前备忘录可能为空，在这个情况下，思考1之后如果可以得到符合要求的补充信息，直接添加即可\n2. 如果更新要求不为空，你需要参考用户的更新要求进行思考\n\n## 输出动作\n假设你正在处理第N个补充信息(memo_id=N)，你应该进行如下的判断:\n### 直接添加\n```\nN. APPEND::APPEND\n```\n如果选择直接添加，直接输出`APPEND`单词即可，不需要复述内容\n### 更新备忘录\n```\nN. UPDATE::[UPDATED_MEMO]\n```\n在`[UPDATED_MEMO]`中，你需要重新写出更新后完整的当前备忘录\n### 放弃合并\n```\nN. ABORT::ABORT\n```\n如果选择放弃合并，直接输出`ABORT`单词即可，不需要复述内容\n\n## 输出模版\n根据上述说明，你的输出应该是如下的模版\n\nTHOUGHT\n---\n1. ACTION::...\n2. ACTION::...\n...\n\n其中:\n- `THOUGHT`是你的思考过程\n- 思考和Action之间使用`---`隔开\n- `N. ACTION::...`是你对于第N个补充信息的操作(memo_id=N)\n\n\n\n## 举例\n### 输入距离\n{\n    \"memo_id\": \"1\",\n    \"new_info\": \"准备期末考试[提及于2025/06/01]\",\n    \"current_memo\": \"准备期中考试[提及于2025/04/01]\",\n    \"topic\": \"学习\",\n    \"subtopic\": \"考试目标\",\n    \"update_instruction\": \"每次更新目标时，需要考虑是否有已经过时或者冲突的目标，并进行删除\",\n}\n{\n    \"memo_id\": \"2\",\n    \"new_info\": \"使用多邻国自学日语中\",\n    \"current_memo\": \"\",\n    \"topic\": \"学习\",\n    \"subtopic\": \"使用软件\",\n}\n{\n    \"memo_id\": \"3\",\n    \"new_info\": \"用户喜欢吃火锅\",\n    \"current_memo\": \"\",\n    \"topic\": \"兴趣\",\n    \"subtopic\": \"运动\",\n}\n\n### 输出举例\n```\n补充信息中提到了用户当前的学习目标是准备期末考试，当前主题描述记录的是用户的学习目标，符合要求。同时注意到期末考试和期中考试的冲突，所以需要移除期中考试的目标，更新为期末考试。\n同时用户提到了他正在使用多邻国进行语言的学习，符合学习软件的需求，由于id为2的补充信息中当前备忘录为空，直接添加即可。\n喜欢吃火锅并不属于兴趣/学习的爱好，也无法从这个信息中得到他潜在的爱好，所以放弃合并。\n---\n1. UPDATE::准备期末考试中[提及于2025/06/01];\n2. APPEND::APPEND\n3. ABORT::ABORT\n```\n\n你需要遵循以下要求：\n- 严格遵守正确的输出格式。\n- 确保更新后备忘录不超过5句话。始终保持简洁并输出备忘录的要点。\n- 永远不要编造输入中未提到的内容。\n- 保留新旧备忘录中的时间标注（例如： XXX[提及于 2025/05/05, 发生于 2022]）。\n- 如果决定更新，确保最终备忘录简洁且没有冗余信息。（例如：\"User is sad; User's mood is sad\" == \"User is sad\"）\n\n以上就是全部内容，现在执行你的工作。\n", "prompt": "\n[{'memo_id': 1, 'new_info': '喜欢听周杰伦。[提及于 2026/01/15]', 'current_memo': '', 'topic': '兴趣爱好', 'subtopic': '音乐', 'topic_description': None, 'update_instruction': None}]\n", "history_messages": []}
+2026-01-15 20:50:14,196 [INFO] memobase_server: Cached zh_merge_profile_yolo GLM-4.7 1138/1186
+2026-01-15 20:50:18,005 [ERROR] memobase_server: Error in get_embedding: Error code: 400 - {'error': {'code': '1211', 'message': '模型不存在，请检查模型代码。'}} Traceback (most recent call last):
+  File "D:\workspace\DouDouChat\server\app\vendor\memobase_server\llms\embeddings\__init__.py", line 49, in get_embedding
+    results = await FACTORIES[CONFIG.embedding_provider](model, texts, phase)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\app\vendor\memobase_server\llms\embeddings\openai_embedding.py", line 11, in openai_embedding
+    response = await openai_async_client.embeddings.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\venv\Lib\site-packages\openai\resources\embeddings.py", line 251, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\venv\Lib\site-packages\openai\_base_client.py", line 1797, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\venv\Lib\site-packages\openai\_base_client.py", line 1597, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.BadRequestError: Error code: 400 - {'error': {'code': '1211', 'message': '模型不存在，请检查模型代码。'}}
+
+2026-01-15 20:50:18,005 [ERROR] memobase_server: {"project_id": "__root__", "user_id": "ca5b9c40-d982-42ad-b11a-1c46eeb1b488"} | Failed to get embeddings: CODE 503; ERROR Error in get_embedding: Error code: 400 - {'error': {'code': '1211', 'message': '模型不存在，请检查模型代码。'}}
+2026-01-15 20:50:18,006 [INFO] memobase_server: {"project_id": "__root__", "user_id": "ca5b9c40-d982-42ad-b11a-1c46eeb1b488"} | Processing 1 event gists
+2026-01-15 20:50:18,474 [ERROR] memobase_server: Error in get_embedding: Error code: 400 - {'error': {'code': '1211', 'message': '模型不存在，请检查模型代码。'}} Traceback (most recent call last):
+  File "D:\workspace\DouDouChat\server\app\vendor\memobase_server\llms\embeddings\__init__.py", line 49, in get_embedding
+    results = await FACTORIES[CONFIG.embedding_provider](model, texts, phase)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\app\vendor\memobase_server\llms\embeddings\openai_embedding.py", line 11, in openai_embedding
+    response = await openai_async_client.embeddings.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\venv\Lib\site-packages\openai\resources\embeddings.py", line 251, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\venv\Lib\site-packages\openai\_base_client.py", line 1797, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\workspace\DouDouChat\server\venv\Lib\site-packages\openai\_base_client.py", line 1597, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.BadRequestError: Error code: 400 - {'error': {'code': '1211', 'message': '模型不存在，请检查模型代码。'}}
+
+2026-01-15 20:50:18,474 [ERROR] memobase_server: {"project_id": "__root__", "user_id": "ca5b9c40-d982-42ad-b11a-1c46eeb1b488"} | Failed to get embeddings: CODE 503; ERROR Error in get_embedding: Error code: 400 - {'error': {'code': '1211', 'message': '模型不存在，请检查模型代码。'}}
+2026-01-15 20:50:18,482 [INFO] memobase_server: {"project_id": "__root__", "user_id": "ca5b9c40-d982-42ad-b11a-1c46eeb1b488"} | Adding 1, updating 0, deleting 0 profiles
+2026-01-15 20:50:18,494 [INFO] memobase_server: {"project_id": "__root__", "user_id": "ca5b9c40-d982-42ad-b11a-1c46eeb1b488"} | Flushed chat buffer(size: 1)
+----------------------------------------
+
+[Step 3] ✅ LLM Processing Complete.
+
+================================================================================
+📋 EXTRACTED PROFILES (User Attributes)
+================================================================================
+  01. [兴趣爱好/音乐]
+      Content: 喜欢听周杰伦。[提及于 2026/01/15]
+      Updated: 2026-01-15 12:50:18
+
+
+================================================================================
+📅 EXTRACTED EVENTS (User Activities/Facts)
+================================================================================
+  01. - 用户喜欢听周杰伦。[提及于 2026/01/15]
+      Created: 2026-01-15 12:50:18
+
+
+================================================================================
+>>> END OF SCENARIO: scenario2_pollution
+================================================================================
+
+
+================================================================================
+🏁 ALL SCENARIOS COMPLETE
+================================================================================
+
+Now you can review the results above and adjust your prompts in:
+  - server/app/vendor/memobase_server/prompts/zh_summary_entry_chats.py
+  - server/app/vendor/memobase_server/prompts/zh_extract_profile.py
+  - server/app/vendor/memobase_server/prompts/event_tagging.py
+
+Then run this script again to see the effect of your changes.
+2026-01-15 20:50:18,497 [INFO] memobase_server: {"project_id": "default", "user_id": "system"} | Memobase background worker is stopping...
