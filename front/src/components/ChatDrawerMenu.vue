@@ -265,10 +265,7 @@ const handleSelectSession = async (sessionId: number) => {
     handleClose() // 选择会话后关闭抽屉
 }
 
-const handleSelectAllMessages = async () => {
-    await sessionStore.resetToMergedView()
-    handleClose()
-}
+
 
 const formatTime = (dateStr?: string) => {
     if (!dateStr) return ''
@@ -364,16 +361,7 @@ const handleExecuteDeleteSession = async () => {
                     <p>暂无历史会话</p>
                 </div>
                 <template v-else>
-                    <!-- 合并视图入口 -->
-                    <button class="session-item merged-view-item" :class="{ 'active': !sessionStore.currentSessionId }"
-                        @click="handleSelectAllMessages">
-                        <div class="session-item-header">
-                            <span class="session-title font-bold text-emerald-600">全部聊天记录</span>
-                        </div>
-                        <div class="session-item-content">
-                            <p class="session-preview text-xs">显示与该好友的所有历史对话消息</p>
-                        </div>
-                    </button>
+
 
                     <button v-for="session in sessionStore.currentSessions" :key="session.id" class="session-item group"
                         :class="{ 'active': session.id === sessionStore.currentSessionId }"

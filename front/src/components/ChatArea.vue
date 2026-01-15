@@ -337,6 +337,17 @@ const formatToolArgs = (args: any) => {
         </div>
       </div>
 
+      <!-- Session Navigation Banner (Back to Merged View) -->
+      <div v-if="sessionStore.currentSessionId" class="session-nav-banner">
+        <div class="banner-content">
+          <Sparkles :size="14" class="nav-icon" />
+          <span class="nav-text">当前正在查看历史对话</span>
+          <button class="nav-action-btn" @click="sessionStore.resetToMergedView">
+            返回全部消息
+          </button>
+        </div>
+      </div>
+
       <!-- Empty State with WeChat Logo -->
       <div v-if="!hasMessages" class="empty-state flex-1">
         <div class="wechat-logo">
@@ -649,6 +660,39 @@ const formatToolArgs = (args: any) => {
 
 .vector-warning-banner:hover {
   background-color: #fde2e2;
+}
+
+.session-nav-banner {
+  background-color: #f1f7ff;
+  color: #576b95;
+  padding: 8px 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #e1e7f0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.session-nav-banner .nav-icon {
+  color: #576b95;
+}
+
+.session-nav-banner .nav-text {
+  color: #7d8b9e;
+}
+
+.nav-action-btn {
+  font-weight: 500;
+  color: #576b95;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.nav-action-btn:hover {
+  text-decoration: underline;
+  opacity: 0.8;
 }
 
 .banner-content {
