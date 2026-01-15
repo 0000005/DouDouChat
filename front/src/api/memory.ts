@@ -128,3 +128,27 @@ export async function getFriendEventGists(friendId: number, limit: number = 50):
     }
     return response.json()
 }
+
+export async function updateEventGist(gistId: string, content: string): Promise<any> {
+    const response = await fetch(withApiBase(`/api/memory/events_gists/${gistId}`), {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+    })
+    if (!response.ok) {
+        throw new Error('Failed to update event gist')
+    }
+    return response.json()
+}
+
+export async function deleteEventGist(gistId: string): Promise<any> {
+    const response = await fetch(withApiBase(`/api/memory/events_gists/${gistId}`), {
+        method: 'DELETE',
+    })
+    if (!response.ok) {
+        throw new Error('Failed to delete event gist')
+    }
+    return response.json()
+}

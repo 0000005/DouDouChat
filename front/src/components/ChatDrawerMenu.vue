@@ -23,13 +23,14 @@ import {
     Brain,
     Pin,
     Trash2,
+    Pencil,
     ChevronLeft,
     CheckCircle2,
     RefreshCw,
     AlertTriangle,
     Loader2
 } from 'lucide-vue-next'
-import { getFriendEventGists, type UserEventGist } from '@/api/memory'
+import { getFriendEventGists, updateEventGist, deleteEventGist, type UserEventGist } from '@/api/memory'
 import { getStaticUrl } from '@/api/base'
 
 interface MenuItem {
@@ -58,6 +59,13 @@ const viewState = ref<'menu' | 'sessions' | 'memories'>('menu')
 const memories = ref<UserEventGist[]>([])
 const isLoadingMemories = ref(false)
 const fetchMemoriesError = ref<string | null>(null)
+const memoryActionError = ref<string | null>(null)
+const isUpdatingMemory = ref(false)
+const isDeletingMemory = ref(false)
+const editingMemory = ref<UserEventGist | null>(null)
+const editContent = ref('')
+const deletingMemory = ref<UserEventGist | null>(null)
+const showDeleteConfirm = ref(false)
 
 // 清空确认状态
 const showClearConfirm = ref(false)
@@ -68,8 +76,9 @@ const fetchMemories = async () => {
     if (!sessionStore.currentFriendId) return
     isLoadingMemories.value = true
     fetchMemoriesError.value = null
+    memoryActionError.value = null
     try {
-        const data = await getFriendEventGists(sessionStore.currentFriendId)
+        const data = await getFriendEventGists(sessionStore.currentFriendId)    
         memories.value = data.gists
     } catch (err: any) {
         fetchMemoriesError.value = err.message || '加载记忆失败'
@@ -80,6 +89,65 @@ const fetchMemories = async () => {
 
 const cleanGistContent = (content: string) => {
     return content.trim().replace(/^- /, '')
+}
+
+const handleEditMemory = (memory: UserEventGist) => {
+    memoryActionError.value = null
+    editingMemory.value = memory
+    editContent.value = cleanGistContent(memory.gist_data.content)
+}
+
+const handleUpdateMemory = async () => {
+    if (!editingMemory.value) return
+    const content = editContent.value.trim()
+    if (!content) {
+        memoryActionError.value = '记忆内容不能为空'
+        return
+    }
+    isUpdatingMemory.value = true
+    memoryActionError.value = null
+    try {
+        await updateEventGist(editingMemory.value.id, content)
+        const target = memories.value.find(item => item.id === editingMemory.value?.id)
+        if (target) {
+            target.gist_data.content = content
+            target.updated_at = new Date().toISOString()
+        }
+        editingMemory.value = null
+        editContent.value = ''
+    } catch (err: any) {
+        memoryActionError.value = err.message || '更新失败'
+    } finally {
+        isUpdatingMemory.value = false
+    }
+}
+
+const handleCancelEdit = () => {
+    editingMemory.value = null
+    editContent.value = ''
+    memoryActionError.value = null
+}
+
+const handleConfirmDelete = (memory: UserEventGist) => {
+    memoryActionError.value = null
+    deletingMemory.value = memory
+    showDeleteConfirm.value = true
+}
+
+const handleDeleteMemory = async () => {
+    if (!deletingMemory.value) return
+    isDeletingMemory.value = true
+    memoryActionError.value = null
+    try {
+        await deleteEventGist(deletingMemory.value.id)
+        memories.value = memories.value.filter(item => item.id !== deletingMemory.value?.id)
+        showDeleteConfirm.value = false
+        deletingMemory.value = null
+    } catch (err: any) {
+        memoryActionError.value = err.message || '删除失败'
+    } finally {
+        isDeletingMemory.value = false
+    }
 }
 
 // 获取当前好友信息
@@ -309,24 +377,35 @@ const formatTime = (dateStr?: string) => {
             <!-- Memories List View -->
             <div v-else-if="viewState === 'memories'" class="memory-history-list">
                 <div v-if="isLoadingMemories" class="list-loading">
-                    <RefreshCw class="animate-spin mr-2 h-4 w-4 inline" />
+                    <RefreshCw class="animate-spin mr-2 h-4 w-4 inline" />      
                     <span>加载中...</span>
                 </div>
                 <div v-else-if="fetchMemoriesError" class="list-error">
                     <p>{{ fetchMemoriesError }}</p>
                     <button class="retry-btn" @click="fetchMemories">重试</button>
                 </div>
-                <div v-else-if="memories.length === 0" class="list-empty">
+                <div v-else-if="memories.length === 0" class="list-empty">      
                     <Brain :size="48" class="empty-icon" />
                     <p>暂无相关记忆</p>
                     <span class="text-xs text-gray-400 mt-2">AI 会根据对话自动整理记忆</span>
                 </div>
                 <div v-else class="memory-items">
+                    <div v-if="memoryActionError" class="list-error memory-action-error">
+                        <p>{{ memoryActionError }}</p>
+                    </div>
                     <div v-for="memory in memories" :key="memory.id" class="memory-card">
                         <div class="memory-content">
-                            {{ cleanGistContent(memory.gist_data.content) }}
+                            {{ cleanGistContent(memory.gist_data.content) }}    
                         </div>
                         <div class="memory-footer">
+                            <div class="memory-actions">
+                                <button class="memory-action-btn" @click="handleEditMemory(memory)">
+                                    <Pencil :size="14" />
+                                </button>
+                                <button class="memory-action-btn memory-action-danger" @click="handleConfirmDelete(memory)">
+                                    <Trash2 :size="14" />
+                                </button>
+                            </div>
                             <span class="memory-time">{{ formatTime(memory.created_at) }}</span>
                         </div>
                     </div>
@@ -362,6 +441,59 @@ const formatTime = (dateStr?: string) => {
                 <Button variant="destructive" @click="handleClearHistory" :disabled="isClearing">
                     <Loader2 v-if="isClearing" class="w-4 h-4 mr-2 animate-spin" />
                     {{ isClearing ? '正在清空...' : '确认清空' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Edit Memory Dialog -->
+    <Dialog :open="!!editingMemory" @update:open="handleCancelEdit">
+        <DialogContent class="sm:max-w-[460px]">
+            <DialogHeader>
+                <DialogTitle>编辑记忆点</DialogTitle>
+                <DialogDescription class="text-gray-600">
+                    修改后会在后台异步重新向量化。
+                </DialogDescription>
+            </DialogHeader>
+            <div class="py-2">
+                <textarea v-model="editContent" class="memory-edit-textarea" rows="5"
+                    placeholder="请输入记忆内容"></textarea>
+            </div>
+            <div v-if="memoryActionError" class="text-sm text-red-500 font-medium">
+                {{ memoryActionError }}
+            </div>
+            <DialogFooter class="gap-2 sm:gap-0">
+                <Button variant="outline" @click="handleCancelEdit" :disabled="isUpdatingMemory">取消</Button>
+                <Button @click="handleUpdateMemory" :disabled="isUpdatingMemory">
+                    <Loader2 v-if="isUpdatingMemory" class="w-4 h-4 mr-2 animate-spin" />
+                    {{ isUpdatingMemory ? '保存中...' : '保存修改' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Delete Memory Dialog -->
+    <Dialog v-model:open="showDeleteConfirm">
+        <DialogContent class="sm:max-w-[425px]">
+            <DialogHeader>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="p-2 bg-red-100 rounded-full">
+                        <AlertTriangle class="w-6 h-6 text-red-600" />
+                    </div>
+                    <DialogTitle>确认删除记忆点？</DialogTitle>
+                </div>
+                <DialogDescription class="text-gray-600 space-y-2 py-2">
+                    <p>删除后将无法恢复该记忆点。</p>
+                </DialogDescription>
+            </DialogHeader>
+            <div v-if="memoryActionError" class="py-2 text-sm text-red-500 font-medium">
+                {{ memoryActionError }}
+            </div>
+            <DialogFooter class="gap-2 sm:gap-0">
+                <Button variant="outline" @click="showDeleteConfirm = false; memoryActionError = null" :disabled="isDeletingMemory">取消</Button>
+                <Button variant="destructive" @click="handleDeleteMemory" :disabled="isDeletingMemory">
+                    <Loader2 v-if="isDeletingMemory" class="w-4 h-4 mr-2 animate-spin" />
+                    {{ isDeletingMemory ? '删除中...' : '确认删除' }}
                 </Button>
             </DialogFooter>
         </DialogContent>
@@ -601,11 +733,65 @@ const formatTime = (dateStr?: string) => {
     margin-top: 10px;
     padding-top: 8px;
     border-top: 1px solid #f9f9f9;
+    align-items: center;
+    gap: 8px;
 }
 
 .memory-time {
     font-size: 11px;
     color: #b2b2b2;
+}
+
+.memory-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+}
+
+.memory-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: #f3f4f6;
+    color: #666;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.memory-action-btn:hover {
+    background: #e9ecef;
+}
+
+.memory-action-danger {
+    color: #fa5151;
+}
+
+.memory-action-error {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #fff2f2;
+    text-align: left;
+}
+
+.memory-edit-textarea {
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+}
+
+.memory-edit-textarea:focus {
+    border-color: #07c160;
+    box-shadow: 0 0 0 2px rgba(7, 193, 96, 0.12);
 }
 
 .menu-item {

@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Path, Body
 from app.services.memo.bridge import MemoService, MemoServiceException
 from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
 from app.schemas.memory import (
-    ProfileCreate, ProfileUpdate, ConfigUpdate, BatchDeleteRequest, StatusResponse, CreateProfileResponse
+    ProfileCreate, ProfileUpdate, ConfigUpdate, BatchDeleteRequest, StatusResponse, CreateProfileResponse,
+    EventGistUpdate
 )
 from app.vendor.memobase_server.models.response import UserProfilesData, ProfileConfigData, UserEventGistsData
 
@@ -157,10 +158,55 @@ async def get_friend_event_gists(friend_id: int, limit: int = 50):
     await ensure_defaults()
     try:
         return await MemoService.filter_friend_event_gists(
-            user_id=DEFAULT_USER_ID, 
+            user_id=DEFAULT_USER_ID,
             space_id=DEFAULT_SPACE_ID, 
             friend_id=friend_id,
             topk=limit
         )
+    except MemoServiceException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.put(
+    "/events_gists/{gist_id}",
+    response_model=StatusResponse,
+    summary="更新记忆点",
+    description="更新指定记忆点的内容，并异步触发向量重建。"
+)
+async def update_event_gist(
+    gist_id: str = Path(..., description="要更新的记忆点 ID"),
+    payload: EventGistUpdate = Body(...)
+):
+    await ensure_defaults()
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="记忆内容不能为空")
+    try:
+        await MemoService.update_event_gist(
+            user_id=DEFAULT_USER_ID,
+            space_id=DEFAULT_SPACE_ID,
+            gist_id=gist_id,
+            content=content
+        )
+        return StatusResponse()
+    except MemoServiceException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete(
+    "/events_gists/{gist_id}",
+    response_model=StatusResponse,
+    summary="删除记忆点",
+    description="删除指定记忆点。"
+)
+async def delete_event_gist(
+    gist_id: str = Path(..., description="要删除的记忆点 ID")
+):
+    await ensure_defaults()
+    try:
+        await MemoService.delete_event_gist(
+            user_id=DEFAULT_USER_ID,
+            space_id=DEFAULT_SPACE_ID,
+            gist_id=gist_id
+        )
+        return StatusResponse()
     except MemoServiceException as e:
         raise HTTPException(status_code=400, detail=str(e))

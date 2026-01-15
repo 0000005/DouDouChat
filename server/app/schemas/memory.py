@@ -19,6 +19,9 @@ class ConfigUpdate(BaseModel):
 class BatchDeleteRequest(BaseModel):
     profile_ids: list[str]
 
+class EventGistUpdate(BaseModel):
+    content: str
+
 class StatusResponse(BaseModel):
     status: str = "success"
     message: Optional[str] = None

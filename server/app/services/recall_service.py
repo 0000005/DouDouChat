@@ -203,8 +203,8 @@ class RecallService:
         result = await Runner.run(agent, agent_messages)
 
         # 6. 处理 Agent 运行结果，提取足迹和召回的事件
-        tool_outputs: List[Dict[String, Any]] = []
-        footprints: List[Dict[String, Any]] = []
+        tool_outputs: List[Dict[str, Any]] = []
+        footprints: List[Dict[str, Any]] = []
         
         last_tool_call_id = None
         last_tool_call_args = None

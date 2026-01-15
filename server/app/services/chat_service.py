@@ -572,6 +572,8 @@ async def _run_chat_generation_task(
                         await queue.put({"event": "thinking", "data": {"delta": f"> {fp['content']}\n"}})
                     elif fp["type"] == "tool_call" and show_tools:
                         await queue.put({"event": "tool_call", "data": {"tool_name": fp["name"], "arguments": fp["arguments"]}})
+                    elif fp["type"] == "tool_result" and show_tools:
+                        await queue.put({"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}})
             except Exception as e:
                 logger.error(f"[GenTask] Recall failed: {e}")
 

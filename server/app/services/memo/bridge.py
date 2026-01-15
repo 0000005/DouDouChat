@@ -11,7 +11,7 @@ from app.vendor.memobase_server.controllers.buffer_background import start_memob
 from app.vendor.memobase_server.models.database import UserEvent, UserEventGist
 from app.vendor.memobase_server.utils import to_uuid
 from app.vendor.memobase_server.llms.embeddings import get_embedding
-from sqlalchemy import text, desc, select, func
+from sqlalchemy import text, desc, select, func, case
 from datetime import datetime, timedelta, timezone
 
 # SDK Controllers
@@ -530,8 +530,12 @@ class MemoService:
         
         # 4. Build SQL query with friend_id tag filter and vector similarity
         # sqlite-vec uses vec_distance_cosine
-        distance_expr = func.vec_distance_cosine(UserEventGist.embedding, query_embedding_bytes)
-        similarity_expr = 1 - distance_expr
+        # Use case() to prevent calling vec_distance_cosine on NULL embeddings
+        distance_expr = case(
+            (UserEventGist.embedding.is_not(None), func.vec_distance_cosine(UserEventGist.embedding, query_embedding_bytes)),
+            else_=None
+        )
+        similarity_expr = (1 - distance_expr)
         
         stmt = (
             select(
@@ -540,11 +544,11 @@ class MemoService:
             )
             .join(UserEvent, UserEventGist.event_id == UserEvent.id)
             .where(
+                UserEventGist.embedding.is_not(None),
                 UserEvent.user_id == user_id_uuid,
                 UserEvent.project_id == space_id,
                 UserEvent.created_at >= days_ago,
-                (1 - distance_expr) > similarity_threshold,
-                UserEventGist.embedding.is_not(None),
+                similarity_expr > similarity_threshold,
             )
             # Add friend_id tag filter using json_each
             .where(text("""
@@ -692,5 +696,141 @@ class MemoService:
             logger.info(f"[delete_friend_memories] Deleted {count} events for friend {friend_id}")
             
             return count
+
+    # --- Event Gist Management ---
+
+    @classmethod
+    async def update_event_gist(
+        cls, user_id: str, space_id: str, gist_id: str, content: str
+    ) -> None:
+        """
+        Update an event gist's content and trigger async re-embedding.
+        """
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Memory Gist] Update requested: gist_id={gist_id}")
+        user_id_uuid = to_uuid(user_id)
+        gist_uuid = to_uuid(gist_id)
+
+        with Session() as session:
+            gist = (
+                session.query(UserEventGist)
+                .filter_by(id=gist_uuid, user_id=user_id_uuid, project_id=space_id)
+                .first()
+            )
+            if gist is None:
+                raise MemoServiceException(f"Event gist {gist_id} not found")
+
+            gist_data = dict(gist.gist_data or {})
+            gist_data["content"] = content
+            gist.gist_data = gist_data
+            if CONFIG.enable_event_embedding:
+                gist.embedding = None
+            session.commit()
+        logger.info(f"[Memory Gist] Updated content: gist_id={gist_id}")
+
+        if CONFIG.enable_event_embedding:
+            logger.info(f"[Memory Gist] Schedule embedding refresh: gist_id={gist_id}")
+            cls._schedule_event_gist_embedding_refresh(
+                user_id=user_id, space_id=space_id, gist_id=gist_id
+            )
+        else:
+            logger.debug("Event embedding disabled; skip gist re-embedding")
+
+    @classmethod
+    async def delete_event_gist(
+        cls, user_id: str, space_id: str, gist_id: str
+    ) -> None:
+        """
+        Delete an event gist by id.
+        """
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Memory Gist] Delete requested: gist_id={gist_id}")
+        user_id_uuid = to_uuid(user_id)
+        gist_uuid = to_uuid(gist_id)
+
+        with Session() as session:
+            gist = (
+                session.query(UserEventGist)
+                .filter_by(id=gist_uuid, user_id=user_id_uuid, project_id=space_id)
+                .first()
+            )
+            if gist is None:
+                raise MemoServiceException(f"Event gist {gist_id} not found")
+            session.delete(gist)
+            session.commit()
+        logger.info(f"[Memory Gist] Deleted: gist_id={gist_id}")
+
+    @classmethod
+    def _schedule_event_gist_embedding_refresh(
+        cls, user_id: str, space_id: str, gist_id: str
+    ) -> None:
+        logger = logging.getLogger(__name__)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.warning("No running loop; skip gist embedding refresh")
+            return
+        loop.create_task(
+            cls._refresh_event_gist_embedding(
+                user_id=user_id, space_id=space_id, gist_id=gist_id
+            )
+        )
+
+    @classmethod
+    async def _refresh_event_gist_embedding(
+        cls, user_id: str, space_id: str, gist_id: str
+    ) -> None:
+        logger = logging.getLogger(__name__)
+        if not CONFIG.enable_event_embedding:
+            return
+
+        user_id_uuid = to_uuid(user_id)
+        gist_uuid = to_uuid(gist_id)
+
+        with Session() as session:
+            gist = (
+                session.query(UserEventGist)
+                .filter_by(id=gist_uuid, user_id=user_id_uuid, project_id=space_id)
+                .first()
+            )
+            if gist is None:
+                logger.info(f"Gist {gist_id} not found for embedding refresh")
+                return
+            gist_data = dict(gist.gist_data or {})
+            content = (gist_data.get("content") or "").strip()
+
+        if not content:
+            logger.info(f"[Memory Gist] Empty content; clear embedding: gist_id={gist_id}")
+            with Session() as session:
+                gist = (
+                    session.query(UserEventGist)
+                    .filter_by(id=gist_uuid, user_id=user_id_uuid, project_id=space_id)
+                    .first()
+                )
+                if gist is None:
+                    return
+                gist.embedding = None
+                session.commit()
+            return
+
+        embeddings = await get_embedding(
+            space_id, [content], phase="event", model=CONFIG.embedding_model
+        )
+        if not embeddings.ok():
+            logger.error(f"[Memory Gist] Embedding refresh failed: gist_id={gist_id} msg={embeddings.msg()}")
+            return
+
+        embedding_bytes = serialize_embedding(embeddings.data()[0])
+        with Session() as session:
+            gist = (
+                session.query(UserEventGist)
+                .filter_by(id=gist_uuid, user_id=user_id_uuid, project_id=space_id)
+                .first()
+            )
+            if gist is None:
+                return
+            gist.embedding = embedding_bytes
+            session.commit()
+        logger.info(f"[Memory Gist] Embedding refreshed: gist_id={gist_id}")
 
 
