@@ -14,6 +14,7 @@ from agents.stream_events import RunItemStreamEvent
 from app.models.llm import LLMConfig
 from app.prompt import get_prompt
 from app.schemas.persona_generator import PersonaGenerateRequest, PersonaGenerateResponse
+from app.services.llm_service import llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +48,12 @@ class PersonaGeneratorService:
 
         # 3. 初始化 GeneratorAgent
         instructions = get_prompt("persona/generate_instructions.txt").strip()
-        
+        model_name = llm_service.normalize_model_name(llm_config.model_name)
+
         agent = Agent(
             name="PersonaGenerator",
             instructions=instructions,
-            model=llm_config.model_name,
+            model=model_name,
         )
 
         # 4. 准备输入
@@ -130,10 +132,11 @@ class PersonaGeneratorService:
         set_default_openai_api("chat_completions")
 
         instructions = get_prompt("persona/generate_instructions.txt").strip()
+        model_name = llm_service.normalize_model_name(llm_config.model_name)
         agent = Agent(
             name="PersonaGenerator",
             instructions=instructions,
-            model=llm_config.model_name,
+            model=model_name,
         )
 
         user_input = f"请为我生成一个角色。用户描述：{request.description}"

@@ -12,7 +12,7 @@ from app.vendor.memobase_server.models.database import UserEvent, UserEventGist
 from app.vendor.memobase_server.utils import to_uuid
 from app.vendor.memobase_server.llms.embeddings import get_embedding
 from sqlalchemy import text, desc, select, func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # SDK Controllers
 from app.vendor.memobase_server.controllers.user import get_user, create_user, delete_user
@@ -439,7 +439,7 @@ class MemoService:
         """
         user_id_uuid = to_uuid(user_id)
         # Use a safe time window (e.g., last 365 days)
-        days_ago = datetime.utcnow() - timedelta(days=365)
+        days_ago = datetime.now(timezone.utc) - timedelta(days=365)
         
         with Session() as session:
             # Query UserEventGist and join with UserEvent to filter by tags
@@ -526,7 +526,7 @@ class MemoService:
         query_embedding_bytes = serialize_embedding(query_embedding)
         
         # 3. Calculate time cutoff (365 days)
-        days_ago = datetime.utcnow() - timedelta(days=365)
+        days_ago = datetime.now(timezone.utc) - timedelta(days=365)
         
         # 4. Build SQL query with friend_id tag filter and vector similarity
         # sqlite-vec uses vec_distance_cosine
@@ -587,7 +587,7 @@ class MemoService:
         friend_id: int,
         topk_event: int = 5,
         threshold: float = 0.5,
-        timeout: float = 3.0
+        timeout: float = 10.0
     ) -> Dict[str, Any]:
         """
         Unified memory recall interface that retrieves relevant events only.

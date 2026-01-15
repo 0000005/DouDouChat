@@ -40,9 +40,6 @@ class ChatSessionRead(ChatSessionBase):
     deleted: bool
     memory_generated: bool = False
     last_message_time: Optional[datetime] = None
-    
-    # Optional: include messages if needed in list/detail view
-    # messages: List[MessageRead] = []
 
     class Config:
         from_attributes = True
@@ -51,4 +48,6 @@ class ChatSessionReadWithStats(ChatSessionRead):
     message_count: int = 0
     last_message_preview: Optional[str] = None
     is_active: bool = False
+
+
 

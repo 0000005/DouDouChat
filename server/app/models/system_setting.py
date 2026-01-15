@@ -1,5 +1,8 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, func, UniqueConstraint
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Text, UniqueConstraint
 from app.db.base import Base
+from app.db.types import UTCDateTime, utc_now
+
 
 class SystemSetting(Base):
     __tablename__ = "system_settings"
@@ -10,9 +13,10 @@ class SystemSetting(Base):
     value = Column(Text, nullable=False)
     value_type = Column(String(20), nullable=False)  # int, bool, string, float, json
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(UTCDateTime, default=utc_now, nullable=False)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("group_name", "key", name="uq_system_settings_group_key"),
     )
+

@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
+from datetime import datetime, timezone
 from app.db.base import Base
+from app.db.types import UTCDateTime, utc_now
 
 
 class FriendTemplate(Base):
@@ -12,5 +14,5 @@ class FriendTemplate(Base):
     system_prompt = Column(Text, nullable=False)
     initial_message = Column(Text, nullable=True)
     tags = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(UTCDateTime, default=utc_now, nullable=False)
+    updated_at = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)

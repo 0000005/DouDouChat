@@ -4,6 +4,18 @@ from app.schemas.llm import LLMConfigUpdate, LLMConfigCreate
 
 class LLMService:
     @staticmethod
+    def normalize_model_name(model_name: str | None) -> str | None:
+        """
+        Normalize model name for agents MultiProvider.
+        SilliconFlow uses "Pro/..." model names; force OpenAI provider prefix.
+        """
+        if not model_name:
+            return model_name
+        if model_name.startswith("Pro/"):
+            return f"openai/{model_name}"
+        return model_name
+
+    @staticmethod
     def get_config(db: Session) -> LLMConfig:
         """
         Get the current active LLM configuration.

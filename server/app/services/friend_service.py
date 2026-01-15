@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.friend import Friend
 from app.models.chat import ChatSession, Message
 from app.schemas.friend import FriendCreate, FriendUpdate
@@ -101,7 +101,7 @@ def ensure_initial_message(db: Session, friend_id: int, initial_message: Optiona
     db_session = ChatSession(
         friend_id=friend_id,
         title="新对话",
-        last_message_time=datetime.now()
+        last_message_time=datetime.now(timezone.utc)
     )
     db.add(db_session)
     db.flush() # 获取 ID

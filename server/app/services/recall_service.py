@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from agents import Agent, Runner, function_tool, set_default_openai_api, set_default_openai_client
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.llm import LLMConfig
 from app.services.memo.bridge import MemoService
+from app.services.llm_service import llm_service
 from app.services.settings_service import SettingsService
 from app.prompt import get_prompt
 
@@ -165,16 +166,19 @@ class RecallService:
         set_default_openai_api("chat_completions")
 
         # 4. 初始化 RecallAgent
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 内部逻辑使用 UTC，但给 RecallAgent 的指示词建议使用北京时间以便更好地进行相对时间检索
+        beijing_tz = timezone(timedelta(hours=8))
+        current_time = datetime.now(timezone.utc).astimezone(beijing_tz).strftime("%Y-%m-%d %H:%M:%S")
         instructions = get_prompt("recall/recall_instructions.txt").format(
             search_rounds=search_rounds,
             current_time=current_time,
         ).strip()
 
+        model_name = llm_service.normalize_model_name(llm_config.model_name)
         agent = Agent(
             name="RecallAgent",
             instructions=instructions,
-            model=llm_config.model_name,
+            model=model_name,
             tools=[tool_recall],
         )
 
@@ -187,7 +191,7 @@ class RecallService:
             "type": "memory_recall_prompt",
             "source": "RecallService.perform_recall",
             "friend_id": friend_id,
-            "model": llm_config.model_name,
+            "model": model_name,
             "instructions": instructions,
             "messages": agent_messages,
             "search_rounds": search_rounds,

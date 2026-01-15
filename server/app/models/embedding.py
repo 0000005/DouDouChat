@@ -1,5 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, func
+from sqlalchemy import Column, Integer, String, Boolean
+from datetime import datetime, timezone
 from app.db.base import Base
+from app.db.types import UTCDateTime, utc_now
+
 
 class EmbeddingSetting(Base):
     __tablename__ = "embedding_settings"
@@ -18,6 +21,7 @@ class EmbeddingSetting(Base):
     # 最大token数
     embedding_max_token_size = Column(Integer, default=8000)
 
-    create_time = Column(DateTime, default=func.now())
-    update_time = Column(DateTime, default=func.now(), onupdate=func.now())
+    create_time = Column(UTCDateTime, default=utc_now)
+    update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now)
     deleted = Column(Boolean, default=False)
+

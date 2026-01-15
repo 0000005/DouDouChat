@@ -10,9 +10,10 @@ from app.models.chat import ChatSession, Message
 from app.models.friend import Friend
 from app.models.llm import LLMConfig
 from app.schemas import chat as chat_schemas
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.services.recall_service import RecallService
 from app.services.settings_service import SettingsService
+from app.services.llm_service import llm_service
 from app.services.memo.bridge import MemoService
 from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
 from app.prompt import get_prompt
@@ -379,7 +380,7 @@ def get_or_create_session_for_friend(db: Session, friend_id: int) -> ChatSession
     if session:
         # 判定是否超时
         if session.last_message_time:
-            now_time = datetime.now()
+            now_time = datetime.now(timezone.utc)
             elapsed = (now_time - session.last_message_time).total_seconds()
             
             logger.info(f"[Session Check] Session {session.id} (Friend {friend_id}): Last msg {session.last_message_time}, Elapsed {elapsed:.1f}s, Timeout {timeout}s")
@@ -430,7 +431,7 @@ def archive_session(db: Session, session_id: int):
 
     if msg_count < 2:
         session.memory_generated = True  # 标记为已处理但无需生成记忆
-        session.update_time = datetime.now()  # 更新时间以确保不会误选
+        session.update_time = datetime.now(timezone.utc)  # 更新时间以确保不会误选
         db.commit()
         logger.info(f"[Archive] Session {session_id} skipped (msg_count={msg_count} < 2). Marked as processed.")
         return
@@ -438,7 +439,7 @@ def archive_session(db: Session, session_id: int):
     # 标记为已处理（记忆生成由后台worker异步处理）
     # 注意：这里先标记，后台任务会检测到并生成记忆
     session.memory_generated = True
-    session.update_time = datetime.now()  # 更新时间以确保不会误选
+    session.update_time = datetime.now(timezone.utc)  # 更新时间以确保不会误选
     db.commit()
     logger.info(f"[Archive] Session {session_id} marked as archived. Memory generation will be handled by background worker.")
     
@@ -474,7 +475,7 @@ async def _archive_session_async(
                 "friend_id": str(friend_id),
                 "friend_name": friend_name,
                 "session_id": str(session_id),
-                "archived_at": datetime.now().isoformat()
+                "archived_at": datetime.now(timezone.utc).isoformat()
             }
         )
         logger.info(f"[Archive Async] Session {session_id} chat inserted with metadata. Blob ID: {result.id if hasattr(result, 'id') else result}")
@@ -571,15 +572,17 @@ async def _run_chat_generation_task(
                         await queue.put({"event": "thinking", "data": {"delta": f"> {fp['content']}\n"}})
                     elif fp["type"] == "tool_call" and show_tools:
                         await queue.put({"event": "tool_call", "data": {"tool_name": fp["name"], "arguments": fp["arguments"]}})
-                    elif fp["type"] == "tool_result" and show_tools:
-                        await queue.put({"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}})
             except Exception as e:
                 logger.error(f"[GenTask] Recall failed: {e}")
 
         # 3. Construct Prompt
-        now_time = datetime.now()
+        # 内部使用 UTC，但喂给 LLM 的提示词应使用北京时间（UTC+8）
+        beijing_tz = timezone(timedelta(hours=8))
+        now_time = datetime.now(timezone.utc).astimezone(beijing_tz)
+        
         weekday_map = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
         current_time = f"{now_time:%Y-%m-%d %H:%M:%S} {weekday_map[now_time.weekday()]}"
+        
         persona_prompt = (friend.system_prompt if friend and friend.system_prompt else get_prompt("chat/default_system_prompt.txt"))
         if persona_prompt:
             persona_prompt = persona_prompt.strip()
@@ -619,10 +622,11 @@ async def _run_chat_generation_task(
         if not enable_thinking:
             model_settings = ModelSettings(reasoning=Reasoning(effort="none"))
 
+        model_name = llm_service.normalize_model_name(llm_config.model_name)
         agent = Agent(
             name=friend_name,
             instructions=final_instructions,
-            model=llm_config.model_name,
+            model=model_name,
             model_settings=model_settings,
         )
 
@@ -703,8 +707,8 @@ async def _run_chat_generation_task(
             ai_msg.content = saved_content if saved_content else "[No response]"
             db.commit()
             chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-            chat_session.update_time = datetime.now()
-            chat_session.last_message_time = datetime.now()
+            chat_session.update_time = datetime.now(timezone.utc)
+            chat_session.last_message_time = datetime.now(timezone.utc)
             if chat_session.memory_generated:
                 chat_session.memory_generated = False
             db.commit()
@@ -774,7 +778,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
             "user_message_id": user_msg.id,
             "model": llm_config.model_name,
             "friend_id": db_session.friend_id,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
     }
 
@@ -794,7 +798,7 @@ def check_and_archive_expired_sessions(db: Session) -> int:
     timeout = SettingsService.get_setting(db, "session", "passive_timeout", 1800)
     
     # Calculate threshold time
-    threshold_time = datetime.now() - timedelta(seconds=timeout)
+    threshold_time = datetime.now(timezone.utc) - timedelta(seconds=timeout)
     
     # Query candidate sessions
     # memory_generated = False AND deleted = False AND last_message_time < threshold
