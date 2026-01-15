@@ -188,6 +188,18 @@ onMounted(async () => {
     step.value = 2
   }
 })
+
+const openTutorial = () => {
+  // Robustly determine base URL ensuring file:// compatibility
+  const baseUrl = window.location.href.split('#')[0].substring(0, window.location.href.split('#')[0].lastIndexOf('/') + 1)
+  const url = `${baseUrl}configuration_doc.pdf`
+
+  if ((window as any).WeAgentChat?.shell?.openExternal) {
+    (window as any).WeAgentChat.shell.openExternal(url)
+  } else {
+    window.open(url, '_blank')
+  }
+}
 </script>
 
 <template>
@@ -271,6 +283,11 @@ onMounted(async () => {
               class="border-gray-200 focus:ring-green-500" />
             <p class="text-[10px] text-gray-400">目前仅支持 OpenAI 兼容接口</p>
           </div>
+          <div class="flex justify-end">
+            <button class="text-xs text-green-600 hover:underline flex items-center" @click="openTutorial">
+              <span class="mr-1">👉</span> 不知道如何配置？查看教程
+            </button>
+          </div>
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">Base URL (可选)</label>
             <Input v-model="llmStore.apiBaseUrl" placeholder="https://api.openai.com/v1" class="border-gray-200" />
@@ -295,6 +312,11 @@ onMounted(async () => {
           <div class="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-100 text-amber-800">
             <AlertCircle class="w-4 h-4 mt-0.5 shrink-0" />
             <p class="text-xs font-medium leading-normal">如果未正确配置向量化模型，记忆系统将无法正常工作。</p>
+          </div>
+          <div class="flex justify-end -mt-2">
+            <button class="text-xs text-green-600 hover:underline flex items-center" @click="openTutorial">
+              <span class="mr-1">👉</span> 查看配置教程
+            </button>
           </div>
           <div class="space-y-2">
             <label class="text-sm font-semibold text-gray-700">Provider 服务商</label>

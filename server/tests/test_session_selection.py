@@ -33,7 +33,7 @@ def test_get_or_create_returns_latest_session(db: Session):
 
 
 def test_get_or_create_skips_archived_sessions(db: Session):
-    """测试: 已归档的会话（memory_generated=True）不应被误选"""
+    """测试: 已归档的会话（memory_generated=1）不应被误选"""
     # 1. Setup: Create a friend
     friend = Friend(name="Test Friend", description="Test", system_prompt="You are helpful.")
     db.add(friend)
@@ -54,7 +54,7 @@ def test_get_or_create_skips_archived_sessions(db: Session):
     # 4. 归档旧会话
     archive_session(db, session_old.id)
     db.refresh(session_old)
-    assert session_old.memory_generated is True
+    assert session_old.memory_generated == 1
 
     # 5. Action: 获取活跃会话
     active_session = get_or_create_session_for_friend(db, friend_id=friend.id)
@@ -82,7 +82,7 @@ def test_get_or_create_creates_new_if_all_archived(db: Session):
 
     archive_session(db, session_1.id)
     db.refresh(session_1)
-    assert session_1.memory_generated is True
+    assert session_1.memory_generated == 1
 
     # 3. Action: 获取活跃会话
     active_session = get_or_create_session_for_friend(db, friend_id=friend.id)
@@ -90,7 +90,7 @@ def test_get_or_create_creates_new_if_all_archived(db: Session):
     # 4. Assert: 应该创建并返回新的会话
     assert active_session.id != session_1.id
     assert active_session.friend_id == friend.id
-    assert active_session.memory_generated is False
+    assert active_session.memory_generated == 0
 
 
 def test_archive_updates_update_time(db: Session):
@@ -122,7 +122,7 @@ def test_archive_updates_update_time(db: Session):
 
     # 6. Assert: update_time 应该被更新
     assert session.update_time > initial_update_time
-    assert session.memory_generated is True
+    assert session.memory_generated == 1
 
 
 def test_multiple_sessions_returns_highest_id(db: Session):
@@ -216,7 +216,7 @@ def test_bug_scenario_manual_new_session(db: Session):
 
     # 5. 验证：会话 4 应该被归档
     db.refresh(session_4)
-    assert session_4.memory_generated is True
+    assert session_4.memory_generated == 1
 
     # 6. Action: 用户发送消息，后端调用 get_or_create_session_for_friend
     active_session = get_or_create_session_for_friend(db, friend_id=friend.id)
@@ -224,4 +224,4 @@ def test_bug_scenario_manual_new_session(db: Session):
     # 7. Assert: 应该返回会话 5（新建的会话），而不是会话 4
     assert active_session.id == session_5.id
     assert active_session.id != session_4.id
-    assert active_session.memory_generated is False
+    assert active_session.memory_generated == 0

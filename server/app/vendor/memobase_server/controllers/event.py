@@ -11,6 +11,26 @@ from sqlalchemy import desc, select, text
 from sqlalchemy.sql import func
 from ..env import TRACE_LOG, CONFIG
 import struct
+import threading
+
+# Global tracking for embedding errors during flush
+# Using a lock to ensure thread safety
+_embedding_error_lock = threading.Lock()
+_last_embedding_error: str | None = None
+
+def set_embedding_error(error_msg: str | None):
+    """Set the last embedding error message."""
+    global _last_embedding_error
+    with _embedding_error_lock:
+        _last_embedding_error = error_msg
+
+def get_and_clear_embedding_error() -> str | None:
+    """Get and clear the last embedding error message."""
+    global _last_embedding_error
+    with _embedding_error_lock:
+        error = _last_embedding_error
+        _last_embedding_error = None
+        return error
 
 def serialize_embedding(embedding: list[float]) -> bytes:
     """Serialize a list of floats to a binary format compatible with sqlite-vec (float32 array)."""
@@ -101,6 +121,7 @@ async def append_user_event(
                 user_id,
                 f"Failed to get embeddings: {embedding.msg()}",
             )
+            set_embedding_error(f"Event embedding failed: {embedding.msg()}")
             embedding = [None]
         else:
             embedding = embedding.data()
@@ -135,6 +156,7 @@ async def append_user_event(
                     user_id,
                     f"Failed to get embeddings: {event_gists_embedding.msg()}",
                 )
+                set_embedding_error(f"Event gists embedding failed: {event_gists_embedding.msg()}")
                 event_gists_embedding = [None] * len(event_gists)
             else:
                 event_gists_embedding = event_gists_embedding.data()

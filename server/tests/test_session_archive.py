@@ -32,7 +32,7 @@ async def test_session_auto_archive_and_queue(db: Session):
     db.commit()
     
     # Verify initial state
-    assert s1.memory_generated is False
+    assert s1.memory_generated == 0
     _memory_generation_queue.clear() # Ensure clean start
     
     # 3. Action: Create a NEW session for the SAME friend
@@ -42,7 +42,7 @@ async def test_session_auto_archive_and_queue(db: Session):
     
     # 4. Assert: s1 should be marked as memory_generated=True
     db.refresh(s1)
-    assert s1.memory_generated is True
+    assert s1.memory_generated == 1
     
     # 5. Assert: s1.id might have been removed if directly scheduled, or still in queue
     # In the test environment, we expect it to be EITHER in queue OR already dispatched
@@ -88,6 +88,6 @@ async def test_skip_short_session(db: Session):
     
     db.refresh(s_short)
     # Should be marked True (processed) but NOT queued
-    assert s_short.memory_generated is True
+    assert s_short.memory_generated == 1
     assert s_short.id not in _memory_generation_queue
     print("[Test] Short session skipped as expected.")

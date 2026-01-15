@@ -164,6 +164,18 @@ const originalSetTab = (tab: string) => {
     testStatus.value = 'idle'
     testMessage.value = ''
 }
+
+const openTutorial = () => {
+    // Robustly determine base URL ensuring file:// compatibility
+    const baseUrl = window.location.href.split('#')[0].substring(0, window.location.href.split('#')[0].lastIndexOf('/') + 1)
+    const url = `${baseUrl}configuration_doc.pdf`
+
+    if ((window as any).WeAgentChat?.shell?.openExternal) {
+        (window as any).WeAgentChat.shell.openExternal(url)
+    } else {
+        window.open(url, '_blank')
+    }
+}
 </script>
 
 <template>
@@ -204,7 +216,12 @@ const originalSetTab = (tab: string) => {
                         <div class="space-y-6">
                             <div>
                                 <h3 class="text-lg font-medium">LLM 配置</h3>
-                                <p class="text-sm text-gray-500">配置连接到大语言模型 API 的参数。</p>
+                                <div class="flex items-center justify-between">
+                                    <p class="text-sm text-gray-500">配置连接到大语言模型 API 的参数。</p>
+                                    <button class="text-xs text-emerald-600 hover:underline" @click="openTutorial">
+                                        查看配置教程
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="space-y-4">
@@ -247,7 +264,12 @@ const originalSetTab = (tab: string) => {
                         <div class="space-y-6">
                             <div>
                                 <h3 class="text-lg font-medium">向量化配置</h3>
-                                <p class="text-sm text-gray-500 text-pretty">配置 Embedding 模型 API 的参数。</p>
+                                <div class="flex items-center justify-between">
+                                    <p class="text-sm text-gray-500 text-pretty">配置 Embedding 模型 API 的参数。</p>
+                                    <button class="text-xs text-emerald-600 hover:underline" @click="openTutorial">
+                                        查看配置教程
+                                    </button>
+                                </div>
                                 <p class="text-xs text-amber-600 mt-1.5 font-medium flex items-center gap-1">
                                     <span class="inline-block w-1 h-1 rounded-full bg-amber-600"></span>
                                     如果未正确配置向量化模型，记忆系统将无法正常工作

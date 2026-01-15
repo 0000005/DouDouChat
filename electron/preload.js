@@ -29,5 +29,6 @@ contextBridge.exposeInMainWorld('WeAgentChat', {
   },
   shell: {
     openLogs: () => ipcRenderer.send('shell:open-logs'),
+    openExternal: (url) => ipcRenderer.send('shell:open-external', url),
   },
 })

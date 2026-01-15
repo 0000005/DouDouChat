@@ -20,7 +20,8 @@ from app.vendor.memobase_server.controllers.profile import (
     get_user_profiles, add_user_profiles, update_user_profiles, delete_user_profiles
 )
 from app.vendor.memobase_server.controllers.event import (
-    get_user_events, append_user_event, update_user_event, delete_user_event, search_user_events
+    get_user_events, append_user_event, update_user_event, delete_user_event, search_user_events,
+    get_and_clear_embedding_error, set_embedding_error
 )
 from app.vendor.memobase_server.controllers.context import get_user_context
 from app.vendor.memobase_server.controllers.blob import insert_blob
@@ -403,14 +404,28 @@ class MemoService:
     @classmethod
     async def trigger_buffer_flush(
         cls, user_id: str, space_id: str, blob_type: BlobType = BlobType.chat
-    ) -> None:
+    ) -> tuple[bool, str]:
         """
         Manually triggers the processing of pending data in the buffer.
+        
+        Returns:
+            (is_ok, error_msg)
+            - (True, "") - Flush completed without embedding errors
+            - (False, "error message") - Flush completed but embedding failed
         """
+        # Clear any previous error before flush
+        set_embedding_error(None)
+        
         promise = await flush_buffer(
             user_id=user_id, project_id=space_id, blob_type=blob_type
         )
         cls._unwrap(promise)
+        
+        # Check if any embedding errors occurred during flush
+        embedding_error = get_and_clear_embedding_error()
+        if embedding_error:
+            return (False, embedding_error)
+        return (True, "")
 
     # --- Project Config Management ---
 
@@ -832,5 +847,8 @@ class MemoService:
             gist.embedding = embedding_bytes
             session.commit()
         logger.info(f"[Memory Gist] Embedding refreshed: gist_id={gist_id}")
+
+
+
 
 

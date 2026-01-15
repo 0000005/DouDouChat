@@ -38,7 +38,8 @@ class ChatSessionRead(ChatSessionBase):
     create_time: datetime
     update_time: datetime
     deleted: bool
-    memory_generated: bool = False
+    memory_generated: int = 0
+    memory_error: Optional[str] = None
     last_message_time: Optional[datetime] = None
 
     class Config:

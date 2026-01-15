@@ -9,6 +9,7 @@ from asyncio import Queue
 from app.models.chat import ChatSession, Message
 from app.models.friend import Friend
 from app.models.llm import LLMConfig
+from app.models.embedding import EmbeddingSetting
 from app.schemas import chat as chat_schemas
 from datetime import datetime, timedelta, timezone
 from app.services.recall_service import RecallService
@@ -113,7 +114,7 @@ def create_session(db: Session, session_in: chat_schemas.ChatSessionCreate) -> C
         .filter(
             ChatSession.friend_id == session_in.friend_id,
             ChatSession.deleted == False,
-            ChatSession.memory_generated == False
+            ChatSession.memory_generated == 0
         )
         .all()
     ]
@@ -174,7 +175,7 @@ def clear_friend_chat_history(db: Session, friend_id: int):
     
     for session in sessions:
         # 如果该会话尚未生成记忆，且包含至少2条消息，触发归档
-        if not session.memory_generated:
+        if session.memory_generated == 0:
             msg_count = db.query(Message).filter(
                 Message.session_id == session.id,
                 Message.deleted == False
@@ -184,7 +185,7 @@ def clear_friend_chat_history(db: Session, friend_id: int):
                 archive_session(db, session.id)
             else:
                 # 消息太少，直接标记为已生成记忆以便不再扫描
-                session.memory_generated = True
+                session.memory_generated = 1
         
         # 2. 标记会话为已删除
         session.deleted = True
@@ -351,6 +352,7 @@ def get_sessions_with_stats_by_friend(db: Session, friend_id: int) -> List[dict]
             "update_time": s.update_time,
             "deleted": s.deleted,
             "memory_generated": s.memory_generated,
+            "memory_error": s.memory_error,
             "last_message_time": s.last_message_time or s.update_time,
             "message_count": counts_map.get(s.id, 0),
             "last_message_preview": previews_map.get(s.id, ""),
@@ -372,7 +374,7 @@ def get_or_create_session_for_friend(db: Session, friend_id: int) -> ChatSession
     # 按 ID 倒序（最新创建的在前）以确保获取的是最新会话
     session = (
         db.query(ChatSession)
-        .filter(ChatSession.friend_id == friend_id, ChatSession.deleted == False, ChatSession.memory_generated == False)
+        .filter(ChatSession.friend_id == friend_id, ChatSession.deleted == False, ChatSession.memory_generated == 0)
         .order_by(ChatSession.id.desc())
         .first()
     )
@@ -419,8 +421,8 @@ def archive_session(db: Session, session_id: int):
         logger.warning(f"[Archive] Session {session_id} not found.")
         return
 
-    if session.memory_generated:
-        logger.info(f"[Archive] Session {session_id} already archived (memory_generated=True). Skipping.")
+    if session.memory_generated == 1:
+        logger.info(f"[Archive] Session {session_id} already archived (memory_generated=1). Skipping.")
         return
 
     # 边界检查:消息数 < 2 跳过
@@ -430,18 +432,28 @@ def archive_session(db: Session, session_id: int):
     ).count()
 
     if msg_count < 2:
-        session.memory_generated = True  # 标记为已处理但无需生成记忆
+        session.memory_generated = 1  # 标记为已处理但无需生成记忆
         session.update_time = datetime.now(timezone.utc)  # 更新时间以确保不会误选
         db.commit()
         logger.info(f"[Archive] Session {session_id} skipped (msg_count={msg_count} < 2). Marked as processed.")
         return
 
-    # 标记为已处理（记忆生成由后台worker异步处理）
-    # 注意：这里先标记，后台任务会检测到并生成记忆
-    session.memory_generated = True
+    # 检查向量化配置
+    embedding_config = db.query(EmbeddingSetting).filter(EmbeddingSetting.deleted == False).order_by(EmbeddingSetting.id.desc()).first()
+    if not embedding_config or not embedding_config.embedding_base_url:
+        session.memory_generated = 2
+        session.memory_error = "向量化未设置，无法生成记忆"
+        session.update_time = datetime.now(timezone.utc)
+        db.commit()
+        logger.warning(f"[Archive] Session {session_id} archived without memory generation (Missing Embedding Config).")
+        return
+
+    # 标记为处理中（实际记忆生成由后台worker异步处理，完成后会设置最终状态）
+    # 状态 3 = 处理中，防止 session 被误选
+    session.memory_generated = 3
     session.update_time = datetime.now(timezone.utc)  # 更新时间以确保不会误选
     db.commit()
-    logger.info(f"[Archive] Session {session_id} marked as archived. Memory generation will be handled by background worker.")
+    logger.info(f"[Archive] Session {session_id} marked as processing (status=3). Memory generation scheduled.")
     
     # 将任务添加到全局队列供后台处理（避免同步上下文中调用 asyncio）
     _schedule_memory_generation(db, session_id)
@@ -462,6 +474,7 @@ async def _archive_session_async(
     from app.vendor.memobase_server.models.blob import BlobType
     from datetime import datetime
     
+    db = SessionLocal()
     try:
         # 1. 确保用户存在
         await MemoService.ensure_user(user_id=DEFAULT_USER_ID, space_id=DEFAULT_SPACE_ID)
@@ -481,17 +494,46 @@ async def _archive_session_async(
         logger.info(f"[Archive Async] Session {session_id} chat inserted with metadata. Blob ID: {result.id if hasattr(result, 'id') else result}")
         
         # 3. 立即触发 buffer flush 以生成摘要
-        await MemoService.trigger_buffer_flush(
+        is_ok, error_msg = await MemoService.trigger_buffer_flush(
             user_id=DEFAULT_USER_ID,
             space_id=DEFAULT_SPACE_ID,
             blob_type=BlobType.chat
         )
-        logger.info(f"[Archive Async] Session {session_id} buffer flush triggered. Memory generation complete.")
+        logger.info(f"[Archive Async] Session {session_id} buffer flush completed. is_ok={is_ok}")
+        
+        # 4. 根据 flush 结果更新状态
+        sess = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if sess:
+            if is_ok:
+                # Success: Update status to 1 (Generated)
+                sess.memory_generated = 1
+                sess.memory_error = None
+                logger.info(f"[Archive Async] Session {session_id} memory generation complete (status=1).")
+            else:
+                # Embedding failed: Update status to 2 (Failed)
+                sess.memory_generated = 2
+                sess.memory_error = error_msg
+                logger.warning(f"[Archive Async] Session {session_id} embedding failed (status=2): {error_msg}")
+            db.commit()
         
     except MemoServiceException as e:
         logger.error(f"[Archive Async] Session {session_id} Memobase SDK error: {e}")
+        # Failure: Update status to 2 (Failed) and save error
+        sess = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if sess:
+            sess.memory_generated = 2
+            sess.memory_error = f"SDK Error: {str(e)}"
+            db.commit()
     except Exception as e:
         logger.error(f"[Archive Async] Session {session_id} unexpected error: {e}")
+        # Failure: Update status to 2 (Failed) and save error
+        sess = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if sess:
+            sess.memory_generated = 2
+            sess.memory_error = f"Unexpected Error: {str(e)}"
+            db.commit()
+    finally:
+        db.close()
 
 async def _run_chat_generation_task(
     session_id: int,
@@ -522,6 +564,14 @@ async def _run_chat_generation_task(
 
         # 2. Prepare History & Recall
         enable_recall = SettingsService.get_setting(db, "memory", "recall_enabled", True)
+
+        # Check for vectorization config
+        if enable_recall:
+            embedding_config = db.query(EmbeddingSetting).filter(EmbeddingSetting.deleted == False).order_by(EmbeddingSetting.id.desc()).first()
+            if not embedding_config or not embedding_config.embedding_base_url:
+                logger.warning("[GenTask] Recall skipped: Embedding Base URL not configured.")
+                enable_recall = False
+
         show_thinking = SettingsService.get_setting(db, "chat", "show_thinking", False)
         show_tools = SettingsService.get_setting(db, "chat", "show_tool_calls", False)
         
@@ -711,8 +761,9 @@ async def _run_chat_generation_task(
             chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
             chat_session.update_time = datetime.now(timezone.utc)
             chat_session.last_message_time = datetime.now(timezone.utc)
-            if chat_session.memory_generated:
-                chat_session.memory_generated = False
+            if chat_session.memory_generated != 0:
+                chat_session.memory_generated = 0
+                chat_session.memory_error = None
             db.commit()
 
         usage["completion_tokens"] = len(full_ai_content)
@@ -808,7 +859,7 @@ def check_and_archive_expired_sessions(db: Session) -> int:
     candidates = (
         db.query(ChatSession)
         .filter(
-            ChatSession.memory_generated == False,
+            ChatSession.memory_generated == 0,
             ChatSession.deleted == False,
             ChatSession.last_message_time < threshold_time  # NULL 值自动过滤
         )

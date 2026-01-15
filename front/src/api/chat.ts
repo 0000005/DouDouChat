@@ -11,7 +11,8 @@ export interface ChatSession {
   message_count?: number
   last_message_preview?: string
   is_active?: boolean
-  memory_generated?: boolean
+  memory_generated?: number
+  memory_error?: string | null
 }
 
 export interface ChatSessionCreate {

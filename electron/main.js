@@ -430,6 +430,10 @@ function registerIpcHandlers() {
       console.error('Failed to open logs dir:', e)
     }
   })
+
+  ipcMain.on('shell:open-external', async (event, url) => {
+    await shell.openExternal(url)
+  })
 }
 
 async function bootstrap() {

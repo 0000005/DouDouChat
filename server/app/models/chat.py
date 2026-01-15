@@ -14,8 +14,14 @@ class ChatSession(Base):
     create_time = Column(UTCDateTime, default=utc_now, nullable=False)
     update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
     deleted = Column(Boolean, default=False, nullable=False)
-    # 是否已经生成记忆
-    memory_generated = Column(Boolean, default=False, nullable=False)
+    # 记忆生成状态:
+    # 0 = 未生成 (活跃会话)
+    # 1 = 已生成 (成功归档)
+    # 2 = 生成失败 (SDK错误/配置缺失等)
+    # 3 = 生成中 (正在归档处理)
+    memory_generated = Column(Integer, default=0, nullable=False)
+    # 生成失败原因
+    memory_error = Column(Text, nullable=True)
     # 最后一条消息的时间
     last_message_time = Column(UTCDateTime, nullable=True)
 
