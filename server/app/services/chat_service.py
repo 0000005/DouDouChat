@@ -152,14 +152,19 @@ def update_session(db: Session, session_id: int, session_in: chat_schemas.ChatSe
 
 def delete_session(db: Session, session_id: int) -> bool:
     """
-    Soft delete a chat session.
+    Soft delete a chat session and cascade delete its memories.
     """
     db_session = get_session(db, session_id)
     if not db_session:
         return False
     
+    # 1. Soft delete session
     db_session.deleted = True
     db.commit()
+
+    # 2. Schedule memory deletion
+    _schedule_session_memory_deletion(session_id)
+    
     return True
 
 def clear_friend_chat_history(db: Session, friend_id: int):
@@ -238,6 +243,42 @@ async def _delete_friend_memories_async(friend_id: int):
         logger.error(f"[Memory Deletion] Failed to delete memories for friend {friend_id}: {e}")
     except Exception as e:
         logger.error(f"[Memory Deletion] Unexpected error for friend {friend_id}: {e}")
+
+# --- Session Memory Deletion Helpers ---
+
+def _schedule_session_memory_deletion(session_id: int):
+    """
+    调度删除 Memobase 中与指定 session 相关的记忆。
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_delete_session_memories_async(session_id))
+        logger.info(f"[Memory Deletion] Scheduled deletion for session {session_id}")
+    except RuntimeError:
+        # 没有运行中的事件循环，使用线程池执行
+        import concurrent.futures
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        executor.submit(_run_delete_session_memories_sync, session_id)
+        logger.info(f"[Memory Deletion] Scheduled deletion (via thread) for session {session_id}")
+
+def _run_delete_session_memories_sync(session_id: int):
+    asyncio.run(_delete_session_memories_async(session_id))
+
+async def _delete_session_memories_async(session_id: int):
+    from app.services.memo.bridge import MemoService, MemoServiceException
+    from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
+    
+    try:
+        count = await MemoService.delete_session_memories(
+            user_id=DEFAULT_USER_ID,
+            space_id=DEFAULT_SPACE_ID,
+            session_id=session_id
+        )
+        logger.info(f"[Memory Deletion] Successfully deleted {count} events for session {session_id}")
+    except MemoServiceException as e:
+        logger.error(f"[Memory Deletion] Failed to delete memories for session {session_id}: {e}")
+    except Exception as e:
+        logger.error(f"[Memory Deletion] Unexpected error for session {session_id}: {e}")
 
 # --- Message Services ---
 
@@ -319,25 +360,46 @@ def get_sessions_with_stats_by_friend(db: Session, friend_id: int) -> List[dict]
     )
     counts_map = {row.session_id: row.count for row in counts_query}
 
-    # 批量获取每个会话的最后一条消息内容
-    # 对于每个会话，获取最新的消息 ID
-    latest_msg_ids_subq = (
-        db.query(Message.session_id, func.max(Message.id).label('max_id'))
-        .filter(Message.session_id.in_(session_ids), Message.deleted == False)
+    # 批量获取每个会话的第一条用户消息作为预览
+    first_user_msg_ids_subq = (
+        db.query(Message.session_id, func.min(Message.id).label('min_id'))
+        .filter(
+            Message.session_id.in_(session_ids), 
+            Message.deleted == False,
+            Message.role == 'user'
+        )
         .group_by(Message.session_id)
         .subquery()
     )
     
-    latest_messages = (
+    previews_map = {}
+    first_user_messages = (
         db.query(Message)
-        .join(latest_msg_ids_subq, Message.id == latest_msg_ids_subq.c.max_id)
+        .join(first_user_msg_ids_subq, Message.id == first_user_msg_ids_subq.c.min_id)
         .all()
     )
-    previews_map = {}
-    for msg in latest_messages:
-        role_name = "AI" if msg.role == "assistant" else "我"
-        text = msg.content[:50]
-        previews_map[msg.session_id] = f"{role_name}: {text}{'...' if len(msg.content) > 50 else ''}"
+    for msg in first_user_messages:
+        text = msg.content[:50].strip().replace('\n', ' ')
+        previews_map[msg.session_id] = f"{text}{'...' if len(msg.content) > 50 else ''}"
+
+    # 对于没有用户消息的会话（如全系统消息），回退到最后一条消息
+    remaining_session_ids = [sid for sid in session_ids if sid not in previews_map]
+    if remaining_session_ids:
+        latest_msg_ids_subq = (
+            db.query(Message.session_id, func.max(Message.id).label('max_id'))
+            .filter(Message.session_id.in_(remaining_session_ids), Message.deleted == False)
+            .group_by(Message.session_id)
+            .subquery()
+        )
+        latest_messages = (
+            db.query(Message)
+            .join(latest_msg_ids_subq, Message.id == latest_msg_ids_subq.c.max_id)
+            .all()
+        )
+        for msg in latest_messages:
+            role_name = "AI" if msg.role == "assistant" else ("系统" if msg.role == "system" else "我")
+            text = msg.content[:50].strip().replace('\n', ' ')
+            previews_map[msg.session_id] = f"{role_name}: {text}{'...' if len(msg.content) > 50 else ''}"
 
     # 第一个是活跃会话（因为按 update_time 倒序排列）
     active_session_id = sessions[0].id

@@ -67,6 +67,12 @@ const editContent = ref('')
 const deletingMemory = ref<UserEventGist | null>(null)
 const showDeleteConfirm = ref(false)
 
+// 会话删除相关状态
+const deletingSessionId = ref<number | null>(null)
+const showSessionDeleteConfirm = ref(false)
+const isDeletingSession = ref(false)
+const sessionActionError = ref<string | null>(null)
+
 // 清空确认状态
 const showClearConfirm = ref(false)
 const isClearing = ref(false)
@@ -275,6 +281,27 @@ const formatTime = (dateStr?: string) => {
     }
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
+
+const handleConfirmDeleteSession = (sessionId: number) => {
+    sessionActionError.value = null
+    deletingSessionId.value = sessionId
+    showSessionDeleteConfirm.value = true
+}
+
+const handleExecuteDeleteSession = async () => {
+    if (!deletingSessionId.value) return
+    isDeletingSession.value = true
+    sessionActionError.value = null
+    try {
+        await sessionStore.deleteSession(deletingSessionId.value)
+        showSessionDeleteConfirm.value = false
+        deletingSessionId.value = null
+    } catch (err: any) {
+        sessionActionError.value = err.message || '删除会话失败'
+    } finally {
+        isDeletingSession.value = false
+    }
+}
 </script>
 
 <template>
@@ -348,12 +375,17 @@ const formatTime = (dateStr?: string) => {
                         </div>
                     </button>
 
-                    <button v-for="session in sessionStore.currentSessions" :key="session.id" class="session-item"
+                    <button v-for="session in sessionStore.currentSessions" :key="session.id" class="session-item group"
                         :class="{ 'active': session.id === sessionStore.currentSessionId }"
                         @click="handleSelectSession(session.id)">
-                        <div class="session-item-header">
-                            <span class="session-title">{{ session.title || '历史对话' }}</span>
-                            <span class="session-time">{{ formatTime(session.create_time) }}</span>
+                        <div class="session-item-header justify-end">
+                            <div class="flex items-center gap-2">
+                                <span class="session-time">{{ formatTime(session.create_time) }}</span>
+                                <div class="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 rounded-full"
+                                    @click.stop="handleConfirmDeleteSession(session.id)" title="删除会话">
+                                    <Trash2 :size="12" class="text-gray-500 hover:text-red-500" />
+                                </div>
+                            </div>
                         </div>
                         <div class="session-item-content">
                             <p class="session-preview text-ellipsis overflow-hidden whitespace-nowrap">{{
@@ -504,6 +536,35 @@ const formatTime = (dateStr?: string) => {
                 <Button variant="destructive" @click="handleDeleteMemory" :disabled="isDeletingMemory">
                     <Loader2 v-if="isDeletingMemory" class="w-4 h-4 mr-2 animate-spin" />
                     {{ isDeletingMemory ? '删除中...' : '确认删除' }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <!-- Delete Session Dialog -->
+    <Dialog v-model:open="showSessionDeleteConfirm">
+        <DialogContent class="sm:max-w-[425px]">
+            <DialogHeader>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="p-2 bg-red-100 rounded-full">
+                        <AlertTriangle class="w-6 h-6 text-red-600" />
+                    </div>
+                    <DialogTitle>确认删除会话？</DialogTitle>
+                </div>
+                <DialogDescription class="text-gray-600 space-y-2 py-2">
+                    <p>将删除该条会话记录。</p>
+                    <p class="text-xs text-red-500">注意：该操作同时会删除由该会话生成的记忆（如有），且不可恢复。</p>
+                </DialogDescription>
+            </DialogHeader>
+            <div v-if="sessionActionError" class="py-2 text-sm text-red-500 font-medium">
+                {{ sessionActionError }}
+            </div>
+            <DialogFooter class="gap-2 sm:gap-0">
+                <Button variant="outline" @click="showSessionDeleteConfirm = false; sessionActionError = null"
+                    :disabled="isDeletingSession">取消</Button>
+                <Button variant="destructive" @click="handleExecuteDeleteSession" :disabled="isDeletingSession">
+                    <Loader2 v-if="isDeletingSession" class="w-4 h-4 mr-2 animate-spin" />
+                    {{ isDeletingSession ? '删除中...' : '确认删除' }}
                 </Button>
             </DialogFooter>
         </DialogContent>

@@ -270,6 +270,27 @@ export const useSessionStore = defineStore('session', () => {
         }
     }
 
+    // Delete a specific session
+    const deleteSession = async (sessionId: number) => {
+        try {
+            await ChatAPI.deleteSession(sessionId)
+            // Remove from local list
+            currentSessions.value = currentSessions.value.filter(s => s.id !== sessionId)
+            // If deleting current session, reset
+            if (currentSessionId.value === sessionId) {
+                currentSessionId.value = null
+                // If we were viewing this session, maybe we should go back to merged view or just empty
+                // Resetting to merged view seems safer if user is in that mode
+                if (currentFriendId.value) {
+                    // Optionally fetch messages again or just init
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to delete session ${sessionId}:`, error)
+            throw error
+        }
+    }
+
     return {
         currentFriendId,
         unreadCounts,
@@ -287,6 +308,7 @@ export const useSessionStore = defineStore('session', () => {
         loadSpecificSession,
         resetToMergedView,
         clearFriendHistory,
+        deleteSession,
         startNewSession: async () => {
             if (!currentFriendId.value) return
 

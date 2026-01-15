@@ -712,6 +712,56 @@ class MemoService:
             
             return count
 
+    @classmethod
+    async def delete_session_memories(
+        cls, user_id: str, space_id: str, session_id: int
+    ) -> int:
+        """
+        Delete all events and event_gists for a specific session_id.
+        
+        Args:
+            user_id: User identifier
+            space_id: Space/project identifier
+            session_id: Session ID to filter by (from event_tags)
+            
+        Returns:
+            Number of events deleted (gists are cascade deleted)
+        """
+        logger = logging.getLogger(__name__)
+        user_id_uuid = to_uuid(user_id)
+        
+        with Session() as session:
+            # Find all UserEvents with the session_id tag
+            query = (
+                session.query(UserEvent)
+                .filter(
+                    UserEvent.user_id == user_id_uuid,
+                    UserEvent.project_id == space_id,
+                )
+                .filter(text(
+                    """
+                    EXISTS (
+                        SELECT 1 
+                        FROM json_each(json_extract(user_events.event_data, '$.event_tags')) 
+                        WHERE json_extract(value, '$.tag') = 'session_id' 
+                        AND json_extract(value, '$.value') = :session_id
+                    )
+                    """
+                ).params(session_id=str(session_id)))
+            )
+            
+            events = query.all()
+            count = len(events)
+            
+            # Delete each event - gists will be cascade deleted
+            for event in events:
+                session.delete(event)
+            
+            session.commit()
+            logger.info(f"[delete_session_memories] Deleted {count} events for session {session_id}")
+            
+            return count
+
     # --- Event Gist Management ---
 
     @classmethod
