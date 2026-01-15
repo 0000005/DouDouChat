@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import packageJson from '../../package.json'
-import { Bug, FileText } from 'lucide-vue-next'
+import { Bug, FileText, RefreshCw, CheckCircle2 } from 'lucide-vue-next'
+import { useUpdateCheck } from '@/composables/useUpdateCheck'
 import {
     Dialog,
     DialogContent,
@@ -23,9 +24,17 @@ const isOpen = computed({
     set: (value) => emit('update:open', value),
 })
 
+const {
+    latestVersion,
+    isChecking,
+    updateAvailable,
+    error,
+    checkUpdate,
+    openReleases
+} = useUpdateCheck()
+
 const appVersion = packageJson.version
 const githubUrl = 'https://github.com/0000005/WeChatAgent'
-const releaseUrl = `${githubUrl}/releases`
 const authorName = 'JerryYin'
 
 const isElectron = computed(() => !!(window as any).WeAgentChat?.isElectron)
@@ -53,9 +62,25 @@ const handleOpenLogs = () => {
                 </div>
                 <div class="flex items-center justify-between">
                     <span class="text-gray-500">版本更新</span>
-                    <a class="text-[#07c160] hover:underline" :href="releaseUrl" target="_blank" rel="noreferrer">
-                        查看更新
-                    </a>
+                    <div class="flex items-center gap-2">
+                        <template v-if="updateAvailable">
+                            <span class="text-[#07c160] font-medium animate-pulse">发现新版本 v{{ latestVersion }}</span>
+                            <button class="text-[#07c160] hover:underline flex items-center gap-1"
+                                @click="openReleases">
+                                立即下载
+                            </button>
+                        </template>
+                        <template v-else>
+                            <button
+                                class="text-[#07c160] hover:underline flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                :disabled="isChecking" @click="checkUpdate">
+                                <RefreshCw v-if="isChecking" :size="14" class="animate-spin" />
+                                <CheckCircle2 v-else-if="latestVersion && !updateAvailable && !error" :size="14" />
+                                {{ isChecking ? '正在检查...' : (error ? '检查失败' : (latestVersion && !updateAvailable ?
+                                    '已是最新版本' : '检查更新')) }}
+                            </button>
+                        </template>
+                    </div>
                 </div>
                 <div class="space-y-1">
                     <div class="text-gray-500">GitHub 地址（求 Star）</div>

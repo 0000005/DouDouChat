@@ -12,6 +12,8 @@ import WindowControls from './components/WindowControls.vue'
 import ChatDrawerMenu from './components/ChatDrawerMenu.vue'
 import FriendComposeDialog from './components/FriendComposeDialog.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useUpdateCheck } from '@/composables/useUpdateCheck'
+import UpdateNotifyDialog from './components/UpdateNotifyDialog.vue'
 
 import { checkHealth } from '@/api/health'
 
@@ -26,6 +28,14 @@ const friendComposeMode = ref<'add' | 'edit'>('add')
 const friendComposeId = ref<number | null>(null)
 const settingsStore = useSettingsStore()
 const settingsDefaultTab = ref('llm')
+
+const {
+  updateAvailable: isUpdateAvailable,
+  latestVersion: latestAppVersion,
+  currentVersion: currentAppVersion,
+  checkUpdate,
+  openReleases
+} = useUpdateCheck()
 
 const handleOpenSettings = (tab: string = 'llm') => {
   settingsDefaultTab.value = tab
@@ -87,6 +97,11 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to check health:', error)
   }
+
+  // 异步检测更新 (Async update check)
+  setTimeout(() => {
+    checkUpdate()
+  }, 2000)
 })
 
 const handleSetupComplete = () => {
@@ -165,6 +180,10 @@ const handleSetupComplete = () => {
 
       <!-- Global Toast Container -->
       <ToastContainer />
+
+      <!-- Update Notification Dialog -->
+      <UpdateNotifyDialog v-model:open="isUpdateAvailable" :latest-version="latestAppVersion"
+        :current-version="currentAppVersion" @download="openReleases" />
     </div>
   </div>
 </template>
