@@ -63,8 +63,7 @@ def test_llm_config(config_in: LLMConfigUpdate) -> dict:
 
         response = client.chat.completions.create(
             model=config_in.model_name or "gpt-3.5-turbo",
-            messages=[{"role": "user", "content": test_message}],
-            max_tokens=10
+            messages=[{"role": "user", "content": test_message}]
         )
         
         return {

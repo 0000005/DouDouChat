@@ -1,0 +1,11 @@
+<svg width="1200" height="700" viewBox="0 0 1200 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="700" rx="28" fill="#F8FAFC" />
+  <rect x="40" y="40" width="1120" height="620" rx="22" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2" stroke-dasharray="10 10" />
+  <rect x="80" y="100" width="260" height="480" rx="24" fill="#F1F5F9" />
+  <rect x="370" y="100" width="750" height="200" rx="24" fill="#ECFDF5" />
+  <rect x="370" y="320" width="750" height="120" rx="24" fill="#F1F5F9" />
+  <rect x="370" y="460" width="750" height="120" rx="24" fill="#F1F5F9" />
+  <text x="740" y="360" text-anchor="middle" fill="#94A3B8" font-family="Noto Sans SC, sans-serif" font-size="28">
+    截图占位 · Space 切换
+  </text>
+</svg>

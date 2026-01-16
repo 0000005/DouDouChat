@@ -432,7 +432,39 @@ function registerIpcHandlers() {
   })
 
   ipcMain.on('shell:open-external', async (event, url) => {
-    await shell.openExternal(url)
+    if (url.startsWith('file://')) {
+      try {
+        const { fileURLToPath } = require('url')
+        let filePath = fileURLToPath(url)
+
+        // Workaround: Windows cannot open files directly inside .asar archives
+        if (filePath.includes('app.asar')) {
+          try {
+            const fileName = path.basename(filePath)
+            // Add a prefix to avoid potential name collisions
+            const tempPath = path.join(app.getPath('temp'), `WeAgentChat_${fileName}`)
+
+            // Electron's fs.readFile can transparently read from inside .asar
+            const data = fs.readFileSync(filePath)
+            fs.writeFileSync(tempPath, data)
+
+            // Open the extracted temp file instead
+            filePath = tempPath
+          } catch (err) {
+            console.error('[shell:open-external] Failed to extract file from ASAR:', err)
+            // Continue to try opening original path as fallback
+          }
+        }
+
+        await shell.openPath(filePath)
+      } catch (e) {
+        console.error('Failed to open local file:', e)
+        // Fallback to openExternal if conversion fails
+        await shell.openExternal(url)
+      }
+    } else {
+      await shell.openExternal(url)
+    }
   })
 }
 

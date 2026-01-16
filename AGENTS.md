@@ -26,6 +26,11 @@ Unlike traditional AI chat tools, WeAgentChat simulates a WeChat-like multi-dime
 
 ## Quick Start
 
+### One-click Start (Development)
+Run in project root:
+`scripts\startAll.bat`
+This script will simultaneously launch the Backend API and Frontend Dev Server.
+
 ### Frontend
 1.  Navigate to `front/`: `cd front`
 2.  Install dependencies: `pnpm install`
@@ -124,6 +129,7 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `IconSidebar.vue`: Vertical icon menu (WeChat style).
     *   `SettingsDialog.vue`: Management of LLM, Memory, and System settings.
     *   `ProfileDialog.vue`: User profile management.
+    *   `SetupWizard.vue`: First-time configuration onboarding.
     *   `EmojiPicker.vue`: WeChat-style emoji selection.
 *   **`stores/`**: Pinia state management.
     *   `session.ts`: Chat session buffers, SSE event parsing, and message history.
@@ -134,7 +140,7 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `thinkingMode.ts`: Global setting for LLM reasoning display.
 *   **`api/`**: Strongly typed REST & SSE clients.
     *   `base.ts`: Base API configuration and Electron port handling.
-    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`.
+    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`, `health.ts`.
 *   **`composables/`**: Reusable Vue Composition API logic (e.g., `useChat.ts`).
 *   **`lib/`**: Utility functions (e.g., `utils.ts` for Tailwind/CSS classes).
 
@@ -152,7 +158,7 @@ FastAPI backend with a modular service-oriented architecture.
     *   `profile.py` & `friend.py`: User profile and AI persona management.
     *   `settings.py`: System configuration API.
     *   `llm.py` & `embedding.py`: AI model provider management.
-    *   `health.py`: Health check for Electron and load balancers.
+    *   `health.py`: Health check and onboarding status.
 *   **`services/`**: Business logic layer.
     *   `chat_service.py`: LLM orchestration, message persistence, and memory RAG.
     *   `recall_service.py`: Multi-step memory recall and agent orchestration.
@@ -254,6 +260,9 @@ Electron wrapper for packaging the app as a standalone desktop application.
     *   配色方案（如微信绿、浅灰色渐变背景等）。
     *   布局（侧边栏、对话列表、聊天窗口的排布）。
     *   交互细节（点击反馈、对话气泡样式等）。
+*   **Prompt Management (LLM Prompts):**
+    *   **禁止硬编码：** 所有用于 LLM 调用的 Prompt 文本**必须**维护在 `server/app/prompt/` 目录下的独立文件中，**严禁**在代码中硬编码 Prompt 字符串。
+    *   **加载方式：** 使用 `server/app/prompt/loader.py` 中的 `load_prompt(category, name)` 函数加载 Prompt 文件。
 *   **Unit Testing:** Run tests using `server\venv\Scripts\python -m pytest server/tests`.
 *   **Logging:** Backend logs are output to the console and saved to `server/logs/app.log`, with daily rotation and 30-day retention.
 

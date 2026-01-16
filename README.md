@@ -79,17 +79,21 @@ WeAgentChat 不一样。
 
 <table>
   <tr>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <h3>🧠 双轨长期记忆</h3>
       <p><strong>全局 Profile</strong> 自动维护你的用户画像<br><strong>事件级 RAG</strong> 将对话提炼为可检索的事件卡片</p>
     </td>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <h3>⏱️ 被动式会话流</h3>
-      <p>告告别"New Chat"按钮<br>30分钟无活动自动归档<br>再次对话，自然延续</p>
+      <p>告别"New Chat"按钮<br>30分钟无活动自动归档<br>再次对话，自然延续</p>
     </td>
-    <td align="center" width="33%">
+    <td align="center" width="25%">
       <h3>💬 微信风格体验</h3>
       <p>熟悉的聊天界面<br>低学习成本<br>专注于对话本身</p>
+    </td>
+    <td align="center" width="25%">
+      <h3>✨ 智能引导创建</h3>
+      <p>一句话描述你想要的角色<br>AI 自动完成 Prompt 工程<br>一键生成人设与头像</p>
     </td>
   </tr>
 </table>
