@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Cropper } from 'vue-advanced-cropper'
 import 'vue-advanced-cropper/dist/style.css'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,13 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const fileInput = ref<HTMLInputElement | null>(null)
-const selectedImage = ref<string | null>(null)
+const selectedImage = ref<string | null>(props.initialImage || null)
+
+watch(() => props.initialImage, (newVal) => {
+  if (newVal) {
+    selectedImage.value = newVal
+  }
+})
 const isOpen = ref(true)
 const isUploading = ref(false)
 const cropperRef = ref<any>(null)
@@ -117,6 +123,7 @@ const AVATAAARS_URL = 'https://getavataaars.com/'
             :stencil-props="{ aspectRatio: 1/1 }"
             :resize-image="{ adjustStencil: false }"
             image-restriction="stencil"
+            :image-attributes="{ crossorigin: 'anonymous' }"
           />
           
           <div v-else class="text-center text-gray-400 p-4">

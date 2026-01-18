@@ -313,6 +313,15 @@ watch(loadMoreTriggerRef, (el) => {
     intersectionObserver.observe(el)
   }
 }, { immediate: true })
+
+// Avatar Preview Logic
+const showAvatarPreview = ref(false)
+const previewAvatarUrl = ref('')
+
+const handleAvatarClick = (url: string) => {
+  previewAvatarUrl.value = url
+  showAvatarPreview.value = true
+}
 </script>
 
 <template>
@@ -430,7 +439,7 @@ watch(loadMoreTriggerRef, (el) => {
                    class="message-group group-assistant">
                 <div class="message-wrapper message-assistant">
                   <!-- Avatar -->
-                  <div class="message-avatar">
+                  <div class="message-avatar" @click="handleAvatarClick(getAssistantAvatar())">
                     <img :src="getAssistantAvatar()" alt="Avatar" />
                   </div>
 
@@ -449,7 +458,7 @@ watch(loadMoreTriggerRef, (el) => {
             <div v-else class="message-group group-user">
               <div class="message-wrapper message-user">
                 <!-- Avatar -->
-                <div class="message-avatar">
+                <div class="message-avatar" @click="handleAvatarClick(getUserAvatar())">
                   <img :src="getUserAvatar()" alt="Avatar" />
                 </div>
 
@@ -510,6 +519,12 @@ watch(loadMoreTriggerRef, (el) => {
       Electron 模式下由 App.vue 中的 ChatDrawerMenu 处理
     -->
     <ChatDrawerMenu v-if="!isElectron" v-model:open="drawerOpen" />
+
+    <Dialog v-model:open="showAvatarPreview">
+      <DialogContent class="p-0 bg-transparent border-none shadow-none max-w-3xl w-auto flex justify-center items-center">
+        <img :src="previewAvatarUrl" class="max-w-full max-h-[80vh] object-contain rounded-md" alt="Avatar Preview" />
+      </DialogContent>
+    </Dialog>
 
     <!-- LLM Not Configured Dialog -->
     <Dialog v-model:open="showNoLlmDialog">
@@ -830,13 +845,21 @@ watch(loadMoreTriggerRef, (el) => {
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
+  cursor: pointer;
+  
 }
 
 .message-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.2s;
 }
+
+.message-avatar:hover img {
+  transform: scale(1.05);
+}
+
 
 .message-bubble-container {
   display: flex;
