@@ -32,6 +32,32 @@ def create_friend(
     friend = friend_service.create_friend(db, friend=friend_in)
     return friend
 
+
+@router.post("/recommend/stream")
+async def recommend_friends_stream(
+    request: friend_schemas.FriendRecommendationRequest,
+    db: Session = Depends(deps.get_db),
+):
+    """
+    根据话题智能推荐适合的 AI 好友（SSE 流式）。
+    
+    返回 Server-Sent Events 流，包含以下事件类型：
+    - **delta**: LLM 生成的增量文本
+    - **result**: 最终解析的推荐列表
+    - **error**: 错误信息
+    """
+    import json
+    from fastapi.responses import StreamingResponse
+    
+    async def event_generator():
+        async for event_data in friend_service.recommend_friends_by_topic_stream(db, request.topic, request.exclude_names):
+            event_type = event_data.get("event", "delta")
+            data_payload = event_data.get("data", {})
+            json_data = json.dumps(data_payload, ensure_ascii=False)
+            yield f"event: {event_type}\ndata: {json_data}\n\n"
+    
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 @router.get("/{friend_id}", response_model=friend_schemas.Friend)
 def read_friend(
     *,

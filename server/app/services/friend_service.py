@@ -4,7 +4,12 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from app.models.friend import Friend
 from app.models.chat import ChatSession, Message
-from app.schemas.friend import FriendCreate, FriendUpdate
+from app.models.llm import LLMConfig
+from app.schemas.friend import FriendCreate, FriendUpdate, FriendRecommendationItem
+from app.prompt.loader import load_prompt
+from openai import AsyncOpenAI
+import json
+import logging
 
 def get_friend(db: Session, friend_id: int) -> Optional[Friend]:
     return db.query(Friend).filter(Friend.id == friend_id, Friend.deleted == False).first()
@@ -129,3 +134,122 @@ def ensure_initial_message(db: Session, friend_id: int, initial_message: Optiona
     db.commit()
     db.refresh(db_message)
     return db_message
+
+
+
+async def recommend_friends_by_topic_stream(db: Session, topic: str, exclude_names: List[str] = []):
+    """
+    根据话题推荐适合的 AI 好友（流式返回）。
+    
+    Yields:
+        dict: SSE 事件，格式为 {"event": "delta"|"result"|"error", "data": {...}}
+    """
+    from jinja2 import Template
+    
+    logger = logging.getLogger(__name__)
+    
+    # 1. 输入验证
+    topic = topic.strip()
+    if not topic:
+        yield {"event": "error", "data": {"detail": "话题不能为空"}}
+        return
+    if len(topic) < 2:
+        yield {"event": "error", "data": {"detail": "话题至少需要2个字符"}}
+        return
+    if len(topic) > 200:
+        yield {"event": "error", "data": {"detail": "话题长度不能超过200字符"}}
+        return
+    
+    logger.info(f"[FriendRecommendationStream] Starting for topic: {topic[:50]}, exclude: {exclude_names}")
+    
+    # 2. Load & Render Prompt
+    try:
+        content = load_prompt("persona/friend_recommendation.txt")
+        template = Template(content)
+        system_prompt = template.render(topic=topic, exclude_names=exclude_names)
+    except Exception as e:
+        logger.error(f"[FriendRecommendationStream] Prompt failed: {e}")
+        yield {"event": "error", "data": {"detail": "推荐功能配置加载失败"}}
+        return
+
+    # 3. 获取 LLM 配置
+    llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
+    if not llm_config:
+        yield {"event": "error", "data": {"detail": "请先在设置中配置 LLM 模型"}}
+        return
+    
+    # 4. Call LLM in Stream Mode
+    client = AsyncOpenAI(base_url=llm_config.base_url, api_key=llm_config.api_key, timeout=60.0)
+    
+    full_content = ""
+    try:
+        stream = await client.chat.completions.create(
+            model=llm_config.model_name,
+            messages=[{"role": "system", "content": system_prompt}],
+            temperature=0.7,
+            stream=True
+        )
+        
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                delta = chunk.choices[0].delta.content
+                full_content += delta
+                yield {"event": "delta", "data": {"delta": delta}}
+                
+    except Exception as e:
+        logger.error(f"[FriendRecommendationStream] LLM call failed: {e}")
+        yield {"event": "error", "data": {"detail": f"AI 调用失败: {str(e)}"}}
+        return
+    
+    # 5. Parse Final Result
+    if not full_content:
+        yield {"event": "error", "data": {"detail": "AI 返回了空结果"}}
+        return
+    
+    logger.info(f"[FriendRecommendationStream] Full LLM response:\n{full_content}")
+    
+    # Cleanup markdown
+    result_text = full_content
+    if "```json" in result_text:
+        result_text = result_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in result_text:
+        result_text = result_text.split("```")[1].split("```")[0].strip()
+    
+    # 预处理修复常见 LLM JSON 格式错误
+    result_text = re.sub(r':\s*([《【\[])', r': "\1', result_text)
+    result_text = re.sub(r'([^\\])""', r'\1"', result_text)
+    result_text = re.sub(r'([。！？\.\!\?])""', r'\1"', result_text)
+    
+    logger.debug(f"[FriendRecommendationStream] Cleaned result_text:\n{result_text}")
+    
+    try:
+        data = json.loads(result_text)
+    except json.JSONDecodeError as e:
+        logger.error(f"[FriendRecommendationStream] JSON parse failed: {e}")
+        logger.error(f"[FriendRecommendationStream] Failed to parse text:\n{result_text}")
+        yield {"event": "error", "data": {"detail": "AI 返回的格式无法解析"}}
+        return
+    
+    # Extract recommendations
+    raw_list = []
+    if isinstance(data, dict):
+        raw_list = data.get("recommendations", []) or next((v for v in data.values() if isinstance(v, list)), [])
+    elif isinstance(data, list):
+        raw_list = data
+    
+    items = []
+    for item in raw_list:
+        if isinstance(item, dict) and "name" in item and "reason" in item:
+            desc = item.get("description_hint") or item.get("description") or item.get("reason")
+            items.append({
+                "name": item["name"],
+                "reason": item["reason"],
+                "description_hint": desc
+            })
+    
+    if not items:
+        yield {"event": "error", "data": {"detail": "AI 未能生成推荐结果"}}
+        return
+    
+    yield {"event": "result", "data": {"recommendations": items}}
+

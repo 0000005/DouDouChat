@@ -8,6 +8,7 @@ openai
 openai-agents
 python-multipart
 alembic
+jinja2
 numpy>=2.3.1
 opentelemetry-api>=1.35.0
 opentelemetry-exporter-prometheus>=0.56b0
