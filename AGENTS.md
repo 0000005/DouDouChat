@@ -105,7 +105,7 @@ This script will simultaneously launch the Backend API and Frontend Dev Server.
 ## Current Status & Structure
 The project is currently in the **active development phase**.
 
-*   **Root Directory:** `e:\workspace\code\WeAgentChat`
+*   **Root Directory:** `e:\workspace\code\DouDouChat`
 
 ---
 
@@ -116,6 +116,7 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
 *   **`components/`**: UI logic and views.
     *   `ai-elements/`: AI-native components (Reasoning, Tool, Canvas, etc.) from `ai-elements-vue`.
     *   `ui/`: Base UI primitives (via shadcn-vue, e.g., HoverCard, Dialog, Button).
+    *   `common/`: Common reusable components.
     *   `ChatArea.vue`: Main message terminal (supports SSE events & reasoning).
     *   `ChatDrawerMenu.vue`: WeChat-style drawer for chat settings and actions.
     *   `Sidebar.vue`: Session list and search.
@@ -123,7 +124,14 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `SettingsDialog.vue`: Management of LLM, Memory, and System settings.
     *   `ProfileDialog.vue`: User profile management.
     *   `SetupWizard.vue`: First-time configuration onboarding.
+    *   `AssistantWizard.vue`: AI-guided friend creation wizard.
+    *   `FriendGallery.vue`: Friend library (preset personas gallery).
+    *   `FriendComposeDialog.vue`: Friend edit/create dialog.
     *   `EmojiPicker.vue`: WeChat-style emoji selection.
+    *   `AboutDialog.vue`: About dialog with version info.
+    *   `UpdateNotifyDialog.vue`: Update notification dialog.
+    *   `WindowControls.vue`: Custom window controls (minimize/maximize/close).
+    *   `ToastContainer.vue`: Toast notification container.
 *   **`stores/`**: Pinia state management.
     *   `session.ts`: Chat session buffers, SSE event parsing, and message history.
     *   `friend.ts`: Persona/Friend metadata and state.
@@ -133,8 +141,11 @@ Vue 3 frontend implemented with a focus on WeChat's aesthetic.
     *   `thinkingMode.ts`: Global setting for LLM reasoning display.
 *   **`api/`**: Strongly typed REST & SSE clients.
     *   `base.ts`: Base API configuration and Electron port handling.
-    *   `chat.ts`, `friend.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`, `health.ts`.
-*   **`composables/`**: Reusable Vue Composition API logic (e.g., `useChat.ts`).
+    *   `chat.ts`, `friend.ts`, `friend-template.ts`, `llm.ts`, `embedding.ts`, `settings.ts`, `memory.ts`, `health.ts`, `upload.ts`.
+*   **`composables/`**: Reusable Vue Composition API logic.
+    *   `useChat.ts`: Chat interaction logic.
+    *   `useToast.ts`: Toast notification management.
+    *   `useUpdateCheck.ts`: Version update checking.
 *   **`lib/`**: Utility functions (e.g., `utils.ts` for Tailwind/CSS classes).
 
 #### 📁 Configuration
@@ -149,6 +160,8 @@ FastAPI backend with a modular service-oriented architecture.
 *   **`api/endpoints/`**: FastAPI routers.
     *   `chat.py`: Real-time SSE streaming.
     *   `profile.py` & `friend.py`: User profile and AI persona management.
+    *   `friend_template.py`: Preset friend templates API.
+    *   `upload.py`: File upload API (avatars, etc.).
     *   `settings.py`: System configuration API.
     *   `llm.py` & `embedding.py`: AI model provider management.
     *   `health.py`: Health check and onboarding status.
@@ -157,15 +170,23 @@ FastAPI backend with a modular service-oriented architecture.
     *   `recall_service.py`: Multi-step memory recall and agent orchestration.
     *   `llm_service.py` & `embedding_service.py`: Model provider abstraction.
     *   `friend_service.py`: Persona and friendship management.
+    *   `friend_template_service.py`: Preset friend template management.
+    *   `persona_generator_service.py`: AI-powered persona generation.
     *   `memo/`: Memory system bridge.
         *   `bridge.py`: Interface to the embedded Memobase SDK.
         *   `constants.py`: Memory system constants and configuration.
     *   `settings_service.py`: Config defaults and DB persistence.
 *   **`models/`**: SQLAlchemy ORM definitions (SQLite target).
-    *   `chat.py`, `friend.py`, `system_setting.py`, `llm.py`, `embedding.py`.
+    *   `chat.py`, `friend.py`, `friend_template.py`, `system_setting.py`, `llm.py`, `embedding.py`.
 *   **`schemas/`**: Pydantic data validation and serialization.
-    *   `chat.py`, `friend.py`, `llm.py`, `embedding.py`, `memory.py`, `sse_events.py`, `system_setting.py`.
-*   **`db/`**: Database initialization (`init_db.py`, `init.sql`) and session management.
+    *   `chat.py`, `friend.py`, `friend_template.py`, `llm.py`, `embedding.py`, `memory.py`, `sse_events.py`, `system_setting.py`, `persona_generator.py`.
+*   **`db/`**: Database initialization and session management.
+    *   `init_db.py`: Database initialization logic.
+    *   `init.sql`: Core schema initialization.
+    *   `init_persona_templates.sql`: Preset friend templates data.
+    *   `session.py`: Database session management.
+    *   `base.py`: SQLAlchemy base configuration.
+    *   `types.py`: Custom database types.
 *   **`core/`**: Core system configuration and `logging.py`.
 *   **`vendor/`**: Third-party modules embedded as SDKs.
     *   **`memobase_server/`**: The core Memory Engine (Event Extraction, RAG).
@@ -177,7 +198,16 @@ FastAPI backend with a modular service-oriented architecture.
     *   `memobase.db`: Memory/Vector storage.
 *   **`logs/`**: Backend log files.
     *   `app.log`: Application runtime logs (rotated daily).
-*   **`tests/`**: Pytest suite (e.g., `test_memo_bridge.py`, `test_chat.py`).
+*   **`tests/`**: Pytest suite.
+    *   `test_chat_api.py`, `test_chat_persistence.py`: Chat functionality tests.
+    *   `test_friend_api.py`: Friend management tests.
+    *   `test_llm_api.py`: LLM configuration tests.
+    *   `test_memo_bridge.py`, `test_memory_extraction_complex.py`: Memory system tests.
+    *   `test_persona_generator.py`: AI persona generation tests.
+    *   `test_profile_api.py`: User profile tests.
+    *   `test_recall_service.py`: Memory recall tests.
+    *   `test_session_archive.py`, `test_session_selection.py`: Session management tests.
+    *   `test_sse_simple.py`, `test_sse_timing.py`: SSE streaming tests.
 
 ---
 
@@ -220,11 +250,25 @@ Electron wrapper for packaging the app as a standalone desktop application.
 ### 📄 Documentation & Planning (`dev-docs/`)
 *   **`prd/`**: High-level requirements and visual identity.
 *   **`userStroy/`**: Business logic and feature requirements (e.g., `passive_session_memory.md`).
-*   **`coding/`**: Granular implementation plans (Divided by Epics).
+*   **`coding/`**: Granular implementation plans (Divided by Epics: `epic_01/`, `epic_02/`, `epic_03/`, `epic_04/`).
 *   **`swagger-api/`**: API definitions (Legacy/Reference).
 *   **`troubleshooting/`**: Guides for common dev issues.
+*   **`tutorial/`**: User tutorials and configuration guides (includes PDF documentation).
 *   **`scripts/`**: Development and deployment scripts.
+*   **`tests/`**: Test-related documentation.
 *   **`temp/`**: Temporary documents (e.g., `electron_packaging_plan.md`).
+
+---
+
+### 🌐 Website (`website/`)
+Project landing page and promotional assets.
+*   `index.html`: Main landing page.
+*   `styles.css`: Page styling.
+*   `main.js`: Interactive scripts.
+*   `assets/`: Screenshots and media resources.
+
+### 📁 Static Assets (`static/`)
+*   **`avatars/`**: Pre-generated avatar images for friends.
 
 ---
 
@@ -254,6 +298,11 @@ Electron wrapper for packaging the app as a standalone desktop application.
 *   **Prompt Management (LLM Prompts):**
     *   **禁止硬编码：** 所有用于 LLM 调用的 Prompt 文本**必须**维护在 `server/app/prompt/` 目录下的独立文件中，**严禁**在代码中硬编码 Prompt 字符串。
     *   **加载方式：** 使用 `server/app/prompt/loader.py` 中的 `load_prompt(category, name)` 函数加载 Prompt 文件。
+    *   **Prompt 分类目录：**
+        *   `chat/`: Chat-related prompts (system prompts, context templates).
+        *   `persona/`: Persona generation prompts.
+        *   `recall/`: Memory recall agent prompts.
+        *   `tests/`: Test prompts.
 *   **Unit Testing:** Run tests using `server\venv\Scripts\python -m pytest server/tests`.
 *   **Logging:** Backend logs are output to the console and saved to `server/logs/app.log`, with daily rotation and 30-day retention.
 
