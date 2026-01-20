@@ -18,6 +18,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { Slider } from '@/components/ui/slider'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const props = defineProps<{
   open: boolean
@@ -42,6 +44,8 @@ const form = ref({
   system_prompt: '',
   avatar: '',
   script_expression: true,
+  temperature: 0.8,
+  top_p: 0.9,
 })
 
 const isOpen = computed({
@@ -56,6 +60,8 @@ const resetForm = () => {
     system_prompt: '',
     avatar: '',
     script_expression: true,
+    temperature: 0.8,
+    top_p: 0.9,
   }
 }
 
@@ -69,6 +75,8 @@ const loadFriendData = () => {
         system_prompt: friend.system_prompt || '',
         avatar: friend.avatar || '',
         script_expression: friend.script_expression ?? true,
+        temperature: typeof friend.temperature === 'number' ? friend.temperature : 0.8,
+        top_p: typeof friend.top_p === 'number' ? friend.top_p : 0.9,
       }
     }
   } else {
@@ -86,6 +94,26 @@ const handleAvatarUploaded = (url: string) => {
   form.value.avatar = url
 }
 
+const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const roundToStep = (value: number, step: number) => Math.round(value / step) * step
+
+const normalizeTemperature = () => {
+  if (!Number.isFinite(form.value.temperature)) {
+    form.value.temperature = 0.8
+    return
+  }
+  form.value.temperature = clampValue(roundToStep(form.value.temperature, 0.1), 0, 2)
+}
+
+const normalizeTopP = () => {
+  if (!Number.isFinite(form.value.top_p)) {
+    form.value.top_p = 0.9
+    return
+  }
+  form.value.top_p = clampValue(roundToStep(form.value.top_p, 0.05), 0, 1)
+}
+
 const isFormValid = computed(() => {
   return form.value.name.trim() && 
          form.value.description.trim() && 
@@ -94,6 +122,9 @@ const isFormValid = computed(() => {
 
 const handleConfirm = async () => {
   if (!isFormValid.value) return
+
+  normalizeTemperature()
+  normalizeTopP()
 
   isSubmitting.value = true
   try {
@@ -104,7 +135,9 @@ const handleConfirm = async () => {
         system_prompt: form.value.system_prompt.trim() || undefined,
         is_preset: false,
         avatar: form.value.avatar || undefined,
-        script_expression: form.value.script_expression
+        script_expression: form.value.script_expression,
+        temperature: form.value.temperature,
+        top_p: form.value.top_p
       })
       emit('success', createdFriend)
       sessionStore.selectFriend(createdFriend.id)
@@ -114,7 +147,9 @@ const handleConfirm = async () => {
         description: form.value.description.trim() || null,
         system_prompt: form.value.system_prompt.trim() || null,
         avatar: form.value.avatar || null,
-        script_expression: form.value.script_expression
+        script_expression: form.value.script_expression,
+        temperature: form.value.temperature,
+        top_p: form.value.top_p
       })
       emit('success', updatedFriend)
     }
@@ -136,49 +171,106 @@ const handleConfirm = async () => {
         </DialogDescription>
       </DialogHeader>
 
-      <!-- Avatar Upload Section -->
-      <div class="flex flex-col items-center py-4 shrink-0">
-        <div class="relative group cursor-pointer" @click="isAvatarUploaderOpen = true">
-          <div
-            class="w-20 h-20 rounded-lg border border-gray-200 shadow-sm bg-gray-50 flex items-center justify-center overflow-hidden">
-            <img v-if="form.avatar" :src="getStaticUrl(form.avatar)" class="w-full h-full object-cover" />
-            <UserPlus v-else class="text-gray-300 w-8 h-8" />
+      <Tabs default-value="basic" class="w-full">
+        <TabsList class="grid grid-cols-2 w-full bg-gray-100 p-1 rounded-lg">
+          <TabsTrigger value="basic"
+            class="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm">
+            基本资料
+          </TabsTrigger>
+          <TabsTrigger value="advanced"
+            class="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm">
+            模型设置
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="basic" class="pt-4">
+          <!-- Avatar Upload Section -->
+          <div class="flex flex-col items-center py-4 shrink-0">
+            <div class="relative group cursor-pointer" @click="isAvatarUploaderOpen = true">
+              <div
+                class="w-20 h-20 rounded-lg border border-gray-200 shadow-sm bg-gray-50 flex items-center justify-center overflow-hidden">
+                <img v-if="form.avatar" :src="getStaticUrl(form.avatar)" class="w-full h-full object-cover" />
+                <UserPlus v-else class="text-gray-300 w-8 h-8" />
+              </div>
+              <div
+                class="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[1px]">
+                <Camera class="text-white w-6 h-6" stroke-width="1.5" />
+              </div>
+            </div>
+            <div class="mt-2 text-xs text-gray-500">{{ mode === 'add' ? '点击设置头像' : '点击更换头像' }}</div>
           </div>
-          <div
-            class="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[1px]">
-            <Camera class="text-white w-6 h-6" stroke-width="1.5" />
+
+          <div class="dialog-form">
+            <div class="form-group">
+              <label for="friend-name" class="form-label">好友名称 <span class="required">*</span></label>
+              <Input id="friend-name" v-model="form.name" :placeholder="mode === 'add' ? '请输入好友名称，如：小助手、知心姐姐' : '请输入好友名称'"
+                class="form-input" />
+            </div>
+
+            <div class="form-group">
+              <label for="friend-description" class="form-label">好友描述 <span class="required">*</span></label>
+              <Input id="friend-description" v-model="form.description" placeholder="简短描述这个好友的特点" class="form-input" />
+            </div>
+
+            <div class="form-group">
+              <label for="friend-system-prompt" class="form-label">系统提示词 <span class="required">*</span></label>
+              <Textarea id="friend-system-prompt" v-model="form.system_prompt"
+                placeholder="设置这个好友的人格特征和行为准则，例如：你是一个温暖友善的朋友，喜欢倾听和给出建设性意见..." class="form-textarea" :rows="5" />
+              <p class="form-hint">系统提示词决定了 AI 好友的人格和回复风格</p>
+            </div>
+
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 mt-2">
+              <div class="space-y-0.5">
+                <Label for="script-expression" class="text-sm font-medium">剧本式表达</Label>
+                <p class="text-[11px] text-gray-500">让 AI 的回复包含动作、神态等环境描写</p>
+              </div>
+              <Switch id="script-expression" v-model="form.script_expression" />
+            </div>
           </div>
-        </div>
-        <div class="mt-2 text-xs text-gray-500">{{ mode === 'add' ? '点击设置头像' : '点击更换头像' }}</div>
-      </div>
+        </TabsContent>
 
-      <div class="dialog-form">
-        <div class="form-group">
-          <label for="friend-name" class="form-label">好友名称 <span class="required">*</span></label>
-          <Input id="friend-name" v-model="form.name" :placeholder="mode === 'add' ? '请输入好友名称，如：小助手、知心姐姐' : '请输入好友名称'"
-            class="form-input" />
-        </div>
+        <TabsContent value="advanced" class="pt-4">
+          <div class="space-y-4">
+            <div class="rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="space-y-1">
+                  <Label for="friend-temperature" class="text-sm font-medium">Temperature</Label>
+                  <p class="text-[11px] text-gray-500">值越高回复更随机，值越低更稳定</p>
+                </div>
+                <Input id="friend-temperature" v-model.number="form.temperature" type="number" min="0" max="2" step="0.1"
+                  class="w-24 h-8 text-xs text-right" @blur="normalizeTemperature" />
+              </div>
+              <div>
+                <Slider :model-value="[form.temperature]" :min="0" :max="2" :step="0.1" class="py-3"
+                  @update:model-value="(val) => { if (val) form.temperature = Number(val[0].toFixed(2)) }" />
+                <div class="flex justify-between text-[11px] text-gray-400 mt-1">
+                  <span>0.0</span>
+                  <span>2.0</span>
+                </div>
+              </div>
+            </div>
 
-        <div class="form-group">
-          <label for="friend-description" class="form-label">好友描述 <span class="required">*</span></label>
-          <Input id="friend-description" v-model="form.description" placeholder="简短描述这个好友的特点" class="form-input" />
-        </div>
-
-        <div class="form-group">
-          <label for="friend-system-prompt" class="form-label">系统提示词 <span class="required">*</span></label>
-          <Textarea id="friend-system-prompt" v-model="form.system_prompt"
-            placeholder="设置这个好友的人格特征和行为准则，例如：你是一个温暖友善的朋友，喜欢倾听和给出建设性意见..." class="form-textarea" :rows="5" />
-          <p class="form-hint">系统提示词决定了 AI 好友的人格和回复风格</p>
-        </div>
-
-        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 mt-2">
-          <div class="space-y-0.5">
-            <Label for="script-expression" class="text-sm font-medium">剧本式表达</Label>
-            <p class="text-[11px] text-gray-500">让 AI 的回复包含动作、神态等环境描写</p>
+            <div class="rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="space-y-1">
+                  <Label for="friend-top-p" class="text-sm font-medium">Top-P</Label>
+                  <p class="text-[11px] text-gray-500">控制采样范围，值越低越保守</p>
+                </div>
+                <Input id="friend-top-p" v-model.number="form.top_p" type="number" min="0" max="1" step="0.05"
+                  class="w-24 h-8 text-xs text-right" @blur="normalizeTopP" />
+              </div>
+              <div>
+                <Slider :model-value="[form.top_p]" :min="0" :max="1" :step="0.05" class="py-3"
+                  @update:model-value="(val) => { if (val) form.top_p = Number(val[0].toFixed(2)) }" />
+                <div class="flex justify-between text-[11px] text-gray-400 mt-1">
+                  <span>0.0</span>
+                  <span>1.0</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <Switch id="script-expression" v-model="form.script_expression" />
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <DialogFooter>
         <Button variant="outline" @click="isOpen = false" :disabled="isSubmitting">取消</Button>

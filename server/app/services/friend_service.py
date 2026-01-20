@@ -70,7 +70,11 @@ def create_friend(db: Session, friend: FriendCreate) -> Friend:
         name=friend.name,
         description=friend.description,
         system_prompt=friend.system_prompt,
-        is_preset=friend.is_preset
+        is_preset=friend.is_preset,
+        avatar=friend.avatar,
+        script_expression=friend.script_expression,
+        temperature=friend.temperature,
+        top_p=friend.top_p,
     )
     db.add(db_friend)
     db.commit()

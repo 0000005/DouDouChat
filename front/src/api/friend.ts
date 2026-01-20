@@ -12,6 +12,8 @@ export interface Friend {
   pinned_at?: string | null
   deleted: boolean
   script_expression: boolean
+  temperature: number
+  top_p: number
   last_message?: string | null
   last_message_role?: string | null
   last_message_time?: string | null
@@ -24,6 +26,8 @@ export interface FriendCreate {
   avatar?: string | null
   is_preset?: boolean
   script_expression?: boolean
+  temperature?: number
+  top_p?: number
 }
 
 export interface FriendUpdate {
@@ -34,6 +38,8 @@ export interface FriendUpdate {
   is_preset?: boolean | null
   pinned_at?: string | null
   script_expression?: boolean | null
+  temperature?: number | null
+  top_p?: number | null
 }
 
 export interface FriendRecommendationItem {

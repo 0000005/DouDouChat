@@ -9,6 +9,8 @@ class FriendBase(BaseModel):
     is_preset: bool = Field(False, description="是否为系统预设")
     avatar: Optional[str] = Field(None, description="头像URL")
     script_expression: bool = Field(True, description="是否启用剧本式表达")
+    temperature: float = Field(0.8, ge=0.0, le=2.0, description="温度参数")
+    top_p: float = Field(0.9, ge=0.0, le=1.0, description="Top-P 参数")
 
 class FriendCreate(FriendBase):
     pass
@@ -20,6 +22,8 @@ class FriendUpdate(BaseModel):
     is_preset: Optional[bool] = None
     avatar: Optional[str] = Field(None, description="头像URL")
     script_expression: Optional[bool] = Field(None, description="是否启用剧本式表达")
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(None, ge=0.0, le=1.0)
     pinned_at: Optional[datetime] = None  # Direct update of pinned_at
 
 class Friend(FriendBase):
