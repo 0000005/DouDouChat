@@ -716,7 +716,22 @@ async def _run_chat_generation_task(
                     elif fp["type"] == "tool_result":
                         await queue.put({"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}})
             except Exception as e:
+                error_detail = f"记忆召回失败: {e}"
                 logger.error(f"[GenTask] Recall failed: {e}")
+                ai_msg = db.query(Message).filter(Message.id == ai_msg_id).first()
+                if ai_msg:
+                    ai_msg.content = f"[错误] {error_detail}"
+                    db.commit()
+                    chat_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+                    if chat_session:
+                        chat_session.update_time = datetime.now(timezone.utc)
+                        chat_session.last_message_time = datetime.now(timezone.utc)
+                        if chat_session.memory_generated != 0:
+                            chat_session.memory_generated = 0
+                            chat_session.memory_error = None
+                        db.commit()
+                await queue.put({"event": "error", "data": {"code": "recall_error", "detail": error_detail}})
+                return
 
         # 3. Construct Prompt
         # 内部使用 UTC，但喂给 LLM 的提示词应使用北京时间（UTC+8）
