@@ -48,10 +48,9 @@ from openai.types.shared import Reasoning
 from openai.types.responses import (
     ResponseOutputText,
     ResponseTextDeltaEvent,
-    ResponseReasoningSummaryTextDeltaEvent,
 )
 from agents import Agent, ModelSettings, Runner, set_default_openai_client, set_default_openai_api
-from agents.items import MessageOutputItem, ReasoningItem
+from agents.items import MessageOutputItem, ReasoningItem, ToolCallItem, ToolCallOutputItem
 from agents.stream_events import RunItemStreamEvent
 
 # Global queue for memory generation tasks (processed by background worker)
@@ -665,8 +664,7 @@ async def _run_chat_generation_task(
                 logger.warning("[GenTask] Recall skipped: Embedding Base URL not configured.")
                 enable_recall = False
 
-        show_thinking = SettingsService.get_setting(db, "chat", "show_thinking", False)
-        show_tools = SettingsService.get_setting(db, "chat", "show_tool_calls", False)
+        show_thinking = enable_thinking
         
         history = (
             db.query(Message)
@@ -711,11 +709,11 @@ async def _run_chat_generation_task(
                 footprints = recall_result.get("footprints", [])
                 
                 for fp in footprints:
-                    if fp["type"] == "thinking" and show_thinking and enable_thinking:
-                        await queue.put({"event": "thinking", "data": {"delta": f"> {fp['content']}\n"}})
-                    elif fp["type"] == "tool_call" and show_tools:
+                    if fp["type"] == "thinking" and show_thinking:
+                        await queue.put({"event": "recall_thinking", "data": {"delta": f"> {fp['content']}\n"}})
+                    elif fp["type"] == "tool_call":
                         await queue.put({"event": "tool_call", "data": {"tool_name": fp["name"], "arguments": fp["arguments"]}})
-                    elif fp["type"] == "tool_result" and show_tools:
+                    elif fp["type"] == "tool_result":
                         await queue.put({"event": "tool_result", "data": {"tool_name": fp["name"], "result": fp["result"]}})
             except Exception as e:
                 logger.error(f"[GenTask] Recall failed: {e}")
@@ -796,24 +794,60 @@ async def _run_chat_generation_task(
         
         buffer = ""
         is_thinking_tag = False
+        has_reasoning_item = False
+        think_fallback_buffer = ""
+        tool_call_names = {}
         THINK_START = "<think>"
         THINK_END = "</think>"
         
         result = Runner.run_streamed(agent, agent_messages)
         async for event in result.stream_events():
-            if event.type == "raw_response_event" and isinstance(event.data, ResponseReasoningSummaryTextDeltaEvent):
-                if enable_thinking and show_thinking:
-                    delta = event.data.delta
-                    if delta:
-                        await queue.put({"event": "thinking", "data": {"delta": delta}})
-                continue
-
             if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
-                if enable_thinking and show_thinking and isinstance(event.item, ReasoningItem):
+                if enable_thinking and isinstance(event.item, ReasoningItem):
+                    has_reasoning_item = True
                     raw = event.item.raw_item
                     text = getattr(raw, 'content', '') or str(getattr(raw, 'summary', ''))
                     if text:
-                        await queue.put({"event": "thinking", "data": {"delta": text}})
+                        await queue.put({"event": "model_thinking", "data": {"delta": text}})
+                continue
+            if isinstance(event, RunItemStreamEvent) and event.name == "tool_called":
+                if isinstance(event.item, ToolCallItem):
+                    raw = event.item.raw_item
+                    if isinstance(raw, dict):
+                        name = raw.get("name")
+                        call_id = raw.get("call_id")
+                        arguments = raw.get("arguments")
+                    else:
+                        name = getattr(raw, "name", None)
+                        call_id = getattr(raw, "call_id", None)
+                        arguments = getattr(raw, "arguments", None)
+                    if call_id and name:
+                        tool_call_names[call_id] = name
+                    await queue.put({
+                        "event": "tool_call",
+                        "data": {
+                            "tool_name": name or "tool",
+                            "arguments": arguments,
+                            "call_id": call_id,
+                        },
+                    })
+                continue
+            if isinstance(event, RunItemStreamEvent) and event.name == "tool_output":
+                if isinstance(event.item, ToolCallOutputItem):
+                    raw = event.item.raw_item
+                    if isinstance(raw, dict):
+                        call_id = raw.get("call_id")
+                    else:
+                        call_id = getattr(raw, "call_id", None)
+                    name = tool_call_names.get(call_id, "tool")
+                    await queue.put({
+                        "event": "tool_result",
+                        "data": {
+                            "tool_name": name,
+                            "result": event.item.output,
+                            "call_id": call_id,
+                        },
+                    })
                 continue
 
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
@@ -841,24 +875,27 @@ async def _run_chat_generation_task(
                         else:
                             end_idx = buffer.find(THINK_END)
                             if end_idx != -1:
-                                if end_idx > 0 and enable_thinking and show_thinking:
-                                    await queue.put({"event": "thinking", "data": {"delta": buffer[:end_idx]}})
+                                if end_idx > 0 and enable_thinking and not has_reasoning_item:
+                                    think_fallback_buffer += buffer[:end_idx]
                                 buffer = buffer[end_idx + len(THINK_END):]
                                 is_thinking_tag = False
                             else:
                                 if "</" not in buffer:
-                                    if enable_thinking and show_thinking:
-                                        await queue.put({"event": "thinking", "data": {"delta": buffer}})
+                                    if enable_thinking and not has_reasoning_item:
+                                        think_fallback_buffer += buffer
                                     buffer = ""
                                 else:
                                     break
         
         if buffer:
-            if is_thinking_tag and enable_thinking and show_thinking:
-                await queue.put({"event": "thinking", "data": {"delta": buffer}})
+            if is_thinking_tag and enable_thinking and not has_reasoning_item:
+                think_fallback_buffer += buffer
             elif not is_thinking_tag:
                 saved_content += buffer
                 await queue.put({"event": "message", "data": {"delta": buffer}})
+
+        if think_fallback_buffer and enable_thinking and not has_reasoning_item:
+            await queue.put({"event": "model_thinking", "data": {"delta": think_fallback_buffer}})
 
         # 5. Save to DB
         ai_msg = db.query(Message).filter(Message.id == ai_msg_id).first()

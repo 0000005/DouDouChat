@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useSessionStore, parseMessageSegments } from '@/stores/session'
+import { useSessionStore, parseMessageSegments, type ToolCall } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
 import { Menu, MoreHorizontal, Brain, MessageSquarePlus, AlertTriangle, Sparkles } from 'lucide-vue-next'
 import {
@@ -9,6 +9,7 @@ import {
   ConversationScrollButton
 } from '@/components/ai-elements/conversation'
 import { MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { StreamMarkdown } from 'streamdown-vue'
 import { useSettingsStore } from '@/stores/settings'
 import { getStaticUrl } from '@/api/base'
 import { useEmbeddingStore } from '@/stores/embedding'
@@ -20,6 +21,7 @@ import {
 import { useChat } from '@/composables/useChat'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import ChatDrawerMenu from '@/components/ChatDrawerMenu.vue'
+import ToolCallsDetail from '@/components/common/ToolCallsDetail.vue'
 import {
   Tooltip,
   TooltipContent,
@@ -294,6 +296,50 @@ const handleRegenerate = async (msg: any) => {
       : '重新生成失败'
     triggerToast(errorMsg)
   }
+}
+
+const thinkingDialogOpen = ref(false)
+const toolCallsDialogOpen = ref(false)
+const activeModelThinkingContent = ref('')
+const activeRecallThinkingContent = ref('')
+const activeToolCalls = ref<ToolCall[]>([])
+
+const getModelThinkingContent = (msg: any): string => {
+  const content = msg?.thinkingContent ?? msg?.reasoning ?? msg?.thinking
+  if (typeof content !== 'string') return ''
+  return content.trim()
+}
+
+const getRecallThinkingContent = (msg: any): string => {
+  const content = msg?.recallThinkingContent ?? msg?.recall_thinking
+  if (typeof content !== 'string') return ''
+  return content.trim()
+}
+
+const getToolCalls = (msg: any): ToolCall[] => {
+  const toolCalls = msg?.toolCalls ?? msg?.tool_calls
+  return Array.isArray(toolCalls) ? toolCalls : []
+}
+
+const hasThinking = (msg: any) => {
+  return getModelThinkingContent(msg).length > 0 || getRecallThinkingContent(msg).length > 0
+}
+const hasToolCalls = (msg: any) => getToolCalls(msg).length > 0
+
+const handleOpenThinking = (msg: any) => {
+  const modelContent = getModelThinkingContent(msg)
+  const recallContent = getRecallThinkingContent(msg)
+  if (!modelContent && !recallContent) return
+  activeModelThinkingContent.value = modelContent
+  activeRecallThinkingContent.value = recallContent
+  thinkingDialogOpen.value = true
+}
+
+const handleOpenToolCalls = (msg: any) => {
+  const toolCalls = getToolCalls(msg)
+  if (!toolCalls.length) return
+  activeToolCalls.value = toolCalls
+  toolCallsDialogOpen.value = true
 }
 
 
@@ -574,6 +620,12 @@ const handleAvatarClick = (url: string) => {
                         <DropdownMenuItem @click="handleCopyContent(segment)">
                           <span>复制</span>
                         </DropdownMenuItem>
+                        <DropdownMenuItem v-if="hasThinking(msg)" @click="handleOpenThinking(msg)">
+                          <span>查看思考过程</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem v-if="hasToolCalls(msg)" @click="handleOpenToolCalls(msg)">
+                          <span>查看工具调用</span>
+                        </DropdownMenuItem>
                         <DropdownMenuItem v-if="canRegenerate(msg, index)" @click="handleRegenerate(msg)">
                           <span>重新回答</span>
                         </DropdownMenuItem>
@@ -668,6 +720,43 @@ const handleAvatarClick = (url: string) => {
       Electron 模式下由 App.vue 中的 ChatDrawerMenu 处理
     -->
     <ChatDrawerMenu v-if="!isElectron" v-model:open="drawerOpen" />
+
+    <Dialog v-model:open="thinkingDialogOpen">
+      <DialogContent class="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>思考过程</DialogTitle>
+        </DialogHeader>
+        <div class="thinking-dialog-body">
+          <div v-if="activeRecallThinkingContent" class="thinking-section">
+            <div class="thinking-section-title">回忆思维链</div>
+            <StreamMarkdown
+              :content="activeRecallThinkingContent"
+              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }"
+              class="thinking-markdown"
+            />
+          </div>
+          <div v-if="activeModelThinkingContent" class="thinking-section">
+            <div class="thinking-section-title">模型思维链</div>
+            <StreamMarkdown
+              :content="activeModelThinkingContent"
+              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }"
+              class="thinking-markdown"
+            />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog v-model:open="toolCallsDialogOpen">
+      <DialogContent class="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>工具调用</DialogTitle>
+        </DialogHeader>
+        <div class="tool-calls-dialog-body">
+          <ToolCallsDetail :tool-calls="activeToolCalls" />
+        </div>
+      </DialogContent>
+    </Dialog>
 
     <Dialog v-model:open="showAvatarPreview">
       <DialogContent
@@ -1386,6 +1475,42 @@ const handleAvatarClick = (url: string) => {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.thinking-dialog-body,
+.tool-calls-dialog-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+:deep(.thinking-markdown) {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #333;
+}
+
+:deep(.thinking-markdown pre) {
+  background: #f7f7f7;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.thinking-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thinking-section + .thinking-section {
+  margin-top: 16px;
+}
+
+.thinking-section-title {
+  font-size: 12px;
+  color: #888;
+  letter-spacing: 0.4px;
 }
 
 /* Message Actions */

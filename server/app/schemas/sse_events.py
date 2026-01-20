@@ -62,4 +62,14 @@ class DoneEventData(TypedDict):
 
 
 # SSE 事件类型枚举
-SSEEventType = Literal["start", "thinking", "message", "tool_call", "tool_result", "error", "done"]
+SSEEventType = Literal[
+    "start",
+    "thinking",
+    "model_thinking",
+    "recall_thinking",
+    "message",
+    "tool_call",
+    "tool_result",
+    "error",
+    "done",
+]

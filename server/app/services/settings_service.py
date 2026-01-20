@@ -104,8 +104,6 @@ class SettingsService:
             ]
             # Clean up deprecated settings
             db.query(SystemSetting).filter_by(group_name="memory", key="profile_topk").delete()
-            db.query(SystemSetting).filter_by(group_name="chat", key="show_thinking").delete()
-            db.query(SystemSetting).filter_by(group_name="chat", key="show_tool_calls").delete()
             db.commit()
             for group, key, val, vtype, desc in defaults:
                 try:

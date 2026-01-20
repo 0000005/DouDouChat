@@ -8,6 +8,7 @@ export interface ToolCall {
     args: any
     result?: any
     status: 'calling' | 'completed' | 'error'
+    callId?: string
 }
 
 export interface Message {
@@ -15,6 +16,7 @@ export interface Message {
     role: 'user' | 'assistant' | 'system'
     content: string
     thinkingContent?: string
+    recallThinkingContent?: string
     toolCalls?: ToolCall[]
     createdAt: number
     sessionId?: number
@@ -297,7 +299,8 @@ export const useSessionStore = defineStore('session', () => {
 
         // Buffers for storing incoming data before they are "shown" in UI
         let contentBuffer = ''
-        let thinkingBuffer = ''
+        let modelThinkingBuffer = ''
+        let recallThinkingBuffer = ''
         let toolCallsBuffer: ToolCall[] = []
         const assistantMsgId = Date.now() + 1
         let capturedSessionId: number | undefined = undefined // Capture session_id from start event
@@ -325,10 +328,14 @@ export const useSessionStore = defineStore('session', () => {
                             localUserMsg.sessionId = data.session_id
                         }
                     }
-                } else if (event === 'thinking') {
+                } else if (event === 'model_thinking' || event === 'thinking') {
                     streamingMap.value[friendId] = true
                     const delta = data.delta || ''
-                    thinkingBuffer += delta
+                    modelThinkingBuffer += delta
+                } else if (event === 'recall_thinking') {
+                    streamingMap.value[friendId] = true
+                    const delta = data.delta || ''
+                    recallThinkingBuffer += delta
                 } else if (event === 'message') {
                     streamingMap.value[friendId] = true
                     const delta = data.delta || ''
@@ -338,12 +345,14 @@ export const useSessionStore = defineStore('session', () => {
                     toolCallsBuffer.push({
                         name: data.tool_name,
                         args: data.arguments,
+                        callId: data.call_id,
                         status: 'calling'
                     })
                 } else if (event === 'tool_result') {
                     streamingMap.value[friendId] = true
-                    // Find the last one with the same name that is still 'calling'
-                    const tc = [...toolCallsBuffer].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
+                    const tc = data.call_id
+                        ? [...toolCallsBuffer].reverse().find(t => t.callId === data.call_id && t.status === 'calling')
+                        : [...toolCallsBuffer].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
                     if (tc) {
                         tc.result = data.result
                         tc.status = 'completed'
@@ -359,7 +368,8 @@ export const useSessionStore = defineStore('session', () => {
                         id: Date.now() + 2,
                         role: 'assistant',
                         content: errorContent,
-                        thinkingContent: thinkingBuffer || undefined,
+                        thinkingContent: modelThinkingBuffer || undefined,
+                        recallThinkingContent: recallThinkingBuffer || undefined,
                         toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
                         createdAt: Date.now(),
                         sessionId: capturedSessionId
@@ -377,7 +387,8 @@ export const useSessionStore = defineStore('session', () => {
                         id: data.message_id || assistantMsgId,
                         role: 'assistant',
                         content: contentBuffer,
-                        thinkingContent: thinkingBuffer || undefined,
+                        thinkingContent: modelThinkingBuffer || undefined,
+                        recallThinkingContent: recallThinkingBuffer || undefined,
                         toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
                         createdAt: Date.now(),
                         sessionId: capturedSessionId // Use captured session_id
@@ -385,7 +396,6 @@ export const useSessionStore = defineStore('session', () => {
                     messagesMap.value[friendId].push(assistantMsg)
 
                     streamingMap.value[friendId] = false
-
                     // Check if user has switched away during streaming - mark as unread
                     // Count segments to match visual perception (3 bubbles = 3 unread)
                     if (currentFriendId.value !== friendId) {
@@ -417,7 +427,8 @@ export const useSessionStore = defineStore('session', () => {
                 id: Date.now() + 2,
                 role: 'assistant',
                 content: finalContent,
-                thinkingContent: thinkingBuffer || undefined,
+                thinkingContent: modelThinkingBuffer || undefined,
+                recallThinkingContent: recallThinkingBuffer || undefined,
                 toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
                 createdAt: Date.now()
             }
@@ -536,7 +547,8 @@ export const useSessionStore = defineStore('session', () => {
         friendStore.updateLastMessage(friendId, '对方正在输入...', 'assistant')
 
         let contentBuffer = ''
-        let thinkingBuffer = ''
+        let modelThinkingBuffer = ''
+        let recallThinkingBuffer = ''
         let toolCallsBuffer: ToolCall[] = []
         const assistantMsgId = Date.now() + 1
 
@@ -557,9 +569,12 @@ export const useSessionStore = defineStore('session', () => {
             for await (const { event, data } of stream) {
                 if (event === 'start') {
                     streamingMap.value[friendId] = true
-                } else if (event === 'thinking') {
+                } else if (event === 'model_thinking' || event === 'thinking') {
                     streamingMap.value[friendId] = true
-                    thinkingBuffer += data.delta || ''
+                    modelThinkingBuffer += data.delta || ''
+                } else if (event === 'recall_thinking') {
+                    streamingMap.value[friendId] = true
+                    recallThinkingBuffer += data.delta || ''
                 } else if (event === 'message') {
                     streamingMap.value[friendId] = true
                     contentBuffer += data.delta || ''
@@ -568,11 +583,14 @@ export const useSessionStore = defineStore('session', () => {
                     toolCallsBuffer.push({
                         name: data.tool_name,
                         args: data.arguments,
+                        callId: data.call_id,
                         status: 'calling'
                     })
                 } else if (event === 'tool_result') {
                     streamingMap.value[friendId] = true
-                    const tc = [...toolCallsBuffer].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
+                    const tc = data.call_id
+                        ? [...toolCallsBuffer].reverse().find(t => t.callId === data.call_id && t.status === 'calling')
+                        : [...toolCallsBuffer].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
                     if (tc) {
                         tc.result = data.result
                         tc.status = 'completed'
@@ -591,7 +609,8 @@ export const useSessionStore = defineStore('session', () => {
                         id: data.message_id || assistantMsgId,
                         role: 'assistant',
                         content: contentBuffer,
-                        thinkingContent: thinkingBuffer || undefined,
+                        thinkingContent: modelThinkingBuffer || undefined,
+                        recallThinkingContent: recallThinkingBuffer || undefined,
                         toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
                         createdAt: Date.now(),
                         sessionId: sessionId // Preserve sessionId for future operations
