@@ -96,7 +96,17 @@ const handleAvatarUploaded = (url: string) => {
 
 const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
-const roundToStep = (value: number, step: number) => Math.round(value / step) * step
+const getStepPrecision = (step: number) => {
+  const stepText = step.toString()
+  const dotIndex = stepText.indexOf('.')
+  return dotIndex === -1 ? 0 : stepText.length - dotIndex - 1
+}
+
+const roundToStep = (value: number, step: number) => {
+  const precision = getStepPrecision(step)
+  const rounded = Math.round((value + Number.EPSILON) / step) * step
+  return Number(rounded.toFixed(precision))
+}
 
 const normalizeTemperature = () => {
   if (!Number.isFinite(form.value.temperature)) {
@@ -242,7 +252,7 @@ const handleConfirm = async () => {
               </div>
               <div>
                 <Slider :model-value="[form.temperature]" :min="0" :max="2" :step="0.1" class="py-3"
-                  @update:model-value="(val) => { if (val) form.temperature = Number(val[0].toFixed(2)) }" />
+                  @update:model-value="(val) => { if (val) form.temperature = roundToStep(val[0], 0.1) }" />
                 <div class="flex justify-between text-[11px] text-gray-400 mt-1">
                   <span>0.0</span>
                   <span>2.0</span>
@@ -261,7 +271,7 @@ const handleConfirm = async () => {
               </div>
               <div>
                 <Slider :model-value="[form.top_p]" :min="0" :max="1" :step="0.05" class="py-3"
-                  @update:model-value="(val) => { if (val) form.top_p = Number(val[0].toFixed(2)) }" />
+                  @update:model-value="(val) => { if (val) form.top_p = roundToStep(val[0], 0.05) }" />
                 <div class="flex justify-between text-[11px] text-gray-400 mt-1">
                   <span>0.0</span>
                   <span>1.0</span>

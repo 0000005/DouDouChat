@@ -7,7 +7,8 @@
     "electron:dev": "electron .",
     "sync:version": "node scripts/sync-version.cjs",
     "electron:build": "pnpm run sync:version && pnpm -C front build && electron-builder",
-    "electron:pack": "pnpm run sync:version && pnpm -C front build && electron-builder --dir"
+    "electron:pack": "pnpm run sync:version && pnpm -C front build && electron-builder --dir",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "tree-kill": "^1.2.2"
