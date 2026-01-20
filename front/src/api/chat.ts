@@ -317,3 +317,80 @@ export async function recallMessage(messageId: number): Promise<void> {
     }
   }
 }
+export async function* regenerateMessageStream(sessionId: number, messageId: number): AsyncGenerator<{ event: string, data: any }> {
+  const sseStartTime = performance.now()
+  let sseFrameCount = 0
+  const formatTime = (t: number) => ((t - sseStartTime) / 1000).toFixed(3)
+
+  console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Starting regeneration for session ${sessionId}, message ${messageId}`)
+
+  const response = await fetch(withApiBase(`/api/chat/sessions/${sessionId}/messages/${messageId}/regenerate`), {
+    method: 'POST',
+  })
+
+  console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Response received at ${formatTime(performance.now())}s, status: ${response.status}`)
+
+  if (!response.ok) {
+    try {
+      const errorData = await response.json()
+      // If backend returns a structured error object even on non-200
+      if (errorData.detail) throw new Error(errorData.detail)
+    } catch (e: any) {
+      if (e.message && e.message !== 'Failed to fetch') throw e // Re-throw if it was our parsed error
+    }
+    throw new Error('Failed to regenerate message')
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) return
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let firstChunkLogged = false
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Stream ended at ${formatTime(performance.now())}s, total frames: ${sseFrameCount}`)
+      break
+    }
+
+    if (!firstChunkLogged && value) {
+      console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] FIRST CHUNK at ${formatTime(performance.now())}s, bytes: ${value.length}`)
+      firstChunkLogged = true
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() || ''
+
+    for (const part of parts) {
+      const lines = part.split('\n')
+      let eventType = 'message'
+      let dataString = ''
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          dataString += (dataString ? '\n' : '') + line.slice(6)
+        }
+      }
+
+      if (dataString) {
+        try {
+          const data = JSON.parse(dataString)
+          sseFrameCount++
+          if (sseFrameCount <= 5 || sseFrameCount % 50 === 0) {
+            const preview = data.delta ? data.delta.substring(0, 20) : JSON.stringify(data).substring(0, 50)
+            console.log(`[SSE-FE ${new Date().toLocaleTimeString()}] Frame #${sseFrameCount} at ${formatTime(performance.now())}s: event=${eventType}, data=${preview}...`)
+          }
+          yield { event: eventType, data }
+        } catch (e) {
+          console.error('Failed to parse SSE data JSON:', e)
+          yield { event: eventType, data: dataString }
+        }
+      }
+    }
+  }
+}

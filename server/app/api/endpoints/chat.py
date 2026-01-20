@@ -208,3 +208,25 @@ def recall_message(
         # 可能是消息不存在，或者不是User消息，或者会话已归档
         raise HTTPException(status_code=400, detail="Recall failed. Check if message exists, is yours, and session is active.")
     return {"ok": True}
+
+@router.post("/sessions/{session_id}/messages/{message_id}/regenerate")
+async def regenerate_message(
+    *,
+    db: Session = Depends(deps.get_db),
+    session_id: int,
+    message_id: int,
+):
+    """
+    Regenerate an AI message.
+    Values:
+    - session_id: ID of the chat session
+    - message_id: ID of the AI message to regenerate
+    """
+    async def event_generator():
+        async for event_data in chat_service.regenerate_message_stream(db, session_id=session_id, ai_message_id=message_id):
+            event_type = event_data.get("event", "message")
+            data_payload = event_data.get("data", {})
+            json_data = json.dumps(data_payload, ensure_ascii=False)
+            yield f"event: {event_type}\ndata: {json_data}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

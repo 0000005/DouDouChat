@@ -300,6 +300,7 @@ export const useSessionStore = defineStore('session', () => {
         let thinkingBuffer = ''
         let toolCallsBuffer: ToolCall[] = []
         const assistantMsgId = Date.now() + 1
+        let capturedSessionId: number | undefined = undefined // Capture session_id from start event
 
         try {
             // 如果当前正在查看特定会话，则按会话 ID 发送消息；否则按好友 ID 发送（由后端自动寻址）
@@ -312,6 +313,9 @@ export const useSessionStore = defineStore('session', () => {
                     // Stream started - mark as streaming immediately
                     streamingMap.value[friendId] = true
                     friendStore.updateLastMessage(friendId, '对方正在输入...', 'assistant')
+
+                    // Capture session_id for later use
+                    capturedSessionId = data.session_id
 
                     // Update local user message with real database ID
                     if (data.user_message_id && messagesMap.value[friendId]) {
@@ -357,7 +361,8 @@ export const useSessionStore = defineStore('session', () => {
                         content: errorContent,
                         thinkingContent: thinkingBuffer || undefined,
                         toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
-                        createdAt: Date.now()
+                        createdAt: Date.now(),
+                        sessionId: capturedSessionId
                     }
                     messagesMap.value[friendId].push(errorMsg)
 
@@ -372,9 +377,10 @@ export const useSessionStore = defineStore('session', () => {
                         id: data.message_id || assistantMsgId,
                         role: 'assistant',
                         content: contentBuffer,
-                        thinkingContent: thinkingBuffer,
-                        toolCalls: toolCallsBuffer,
-                        createdAt: Date.now()
+                        thinkingContent: thinkingBuffer || undefined,
+                        toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
+                        createdAt: Date.now(),
+                        sessionId: capturedSessionId // Use captured session_id
                     }
                     messagesMap.value[friendId].push(assistantMsg)
 
@@ -398,6 +404,7 @@ export const useSessionStore = defineStore('session', () => {
                     friendStore.updateLastMessage(friendId, contentBuffer, 'assistant')
                 }
             }
+
 
         } catch (error) {
             console.error('Failed to send message:', error)
@@ -505,6 +512,113 @@ export const useSessionStore = defineStore('session', () => {
         }
     }
 
+    // Regenerate an AI message
+    const regenerateMessage = async (message: Message) => {
+        if (!currentFriendId.value) return
+        if (message.role !== 'assistant') return
+
+        const friendId = currentFriendId.value
+        const messages = messagesMap.value[friendId] || []
+        const msgIndex = messages.findIndex(m => m.id === message.id)
+
+        // 1. Save backup of old message for recovery on failure
+        const oldMessageBackup = msgIndex !== -1 ? { ...messages[msgIndex] } : null
+
+        // 2. Remove the old message locally (optimistic update)
+        if (msgIndex !== -1) {
+            messages.splice(msgIndex, 1)
+        } else {
+            console.warn("Could not find message to regenerate in local store")
+        }
+
+        // 3. Prepare for streaming
+        streamingMap.value[friendId] = true
+        friendStore.updateLastMessage(friendId, '对方正在输入...', 'assistant')
+
+        let contentBuffer = ''
+        let thinkingBuffer = ''
+        let toolCallsBuffer: ToolCall[] = []
+        const assistantMsgId = Date.now() + 1
+
+        const sessionId = message.sessionId
+        if (!sessionId) {
+            console.error("Cannot regenerate message without session ID")
+            // Restore old message
+            if (oldMessageBackup) {
+                messagesMap.value[friendId].push(oldMessageBackup)
+            }
+            streamingMap.value[friendId] = false
+            return
+        }
+
+        try {
+            const stream = ChatAPI.regenerateMessageStream(sessionId, message.id)
+
+            for await (const { event, data } of stream) {
+                if (event === 'start') {
+                    streamingMap.value[friendId] = true
+                } else if (event === 'thinking') {
+                    streamingMap.value[friendId] = true
+                    thinkingBuffer += data.delta || ''
+                } else if (event === 'message') {
+                    streamingMap.value[friendId] = true
+                    contentBuffer += data.delta || ''
+                } else if (event === 'tool_call') {
+                    streamingMap.value[friendId] = true
+                    toolCallsBuffer.push({
+                        name: data.tool_name,
+                        args: data.arguments,
+                        status: 'calling'
+                    })
+                } else if (event === 'tool_result') {
+                    streamingMap.value[friendId] = true
+                    const tc = [...toolCallsBuffer].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
+                    if (tc) {
+                        tc.result = data.result
+                        tc.status = 'completed'
+                    }
+                } else if (event === 'error' || event === 'task_error') {
+                    // AC-6: Restore old message on error
+                    if (oldMessageBackup) {
+                        messagesMap.value[friendId].push(oldMessageBackup)
+                        friendStore.updateLastMessage(friendId, oldMessageBackup.content, 'assistant')
+                    }
+                    streamingMap.value[friendId] = false
+                    const errorDetail = data.detail || data.message || JSON.stringify(data)
+                    throw new Error(errorDetail)
+                } else if (event === 'done') {
+                    const assistantMsg: Message = {
+                        id: data.message_id || assistantMsgId,
+                        role: 'assistant',
+                        content: contentBuffer,
+                        thinkingContent: thinkingBuffer || undefined,
+                        toolCalls: toolCallsBuffer.length > 0 ? toolCallsBuffer : undefined,
+                        createdAt: Date.now(),
+                        sessionId: sessionId // Preserve sessionId for future operations
+                    }
+                    messagesMap.value[friendId].push(assistantMsg)
+                    streamingMap.value[friendId] = false
+                    if (currentFriendId.value !== friendId) {
+                        const segmentCount = parseMessageSegments(contentBuffer).length || 1
+                        unreadCounts.value[friendId] = (unreadCounts.value[friendId] || 0) + segmentCount
+                    }
+                    friendStore.updateLastMessage(friendId, contentBuffer, 'assistant')
+                }
+            }
+        } catch (error) {
+            console.error('Failed to regenerate message:', error)
+            // AC-6: Restore old message on network/catch error
+            if (oldMessageBackup && !messagesMap.value[friendId].some(m => m.id === oldMessageBackup.id)) {
+                messagesMap.value[friendId].push(oldMessageBackup)
+                friendStore.updateLastMessage(friendId, oldMessageBackup.content, 'assistant')
+            }
+            streamingMap.value[friendId] = false
+            throw error // Re-throw for ChatArea to show toast
+        } finally {
+            streamingMap.value[friendId] = false
+        }
+    }
+
     return {
         currentFriendId,
         unreadCounts,
@@ -528,6 +642,7 @@ export const useSessionStore = defineStore('session', () => {
         resetToMergedView,
         clearFriendHistory,
         recallMessage,
+        regenerateMessage,
         deleteSession,
         startNewSession: async () => {
             if (!currentFriendId.value) return

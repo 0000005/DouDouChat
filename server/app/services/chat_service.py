@@ -774,9 +774,12 @@ async def _run_chat_generation_task(
         set_default_openai_client(client, use_for_tracing=False)
         set_default_openai_api("chat_completions")
 
-        model_settings = ModelSettings()
+        temperature = friend.temperature if friend and friend.temperature is not None else 0.7
+        top_p = friend.top_p if friend and friend.top_p is not None else 1.0
+        model_settings_kwargs = {"temperature": temperature, "top_p": top_p}
         if not enable_thinking:
-            model_settings = ModelSettings(reasoning=Reasoning(effort="none"))
+            model_settings_kwargs["reasoning"] = Reasoning(effort="none")
+        model_settings = ModelSettings(**model_settings_kwargs)
 
         model_name = llm_service.normalize_model_name(llm_config.model_name)
         agent = Agent(
@@ -939,11 +942,117 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         }
     }
 
+
     while True:
         event = await queue.get()
         if event is None: # Sentinel
             break
         yield event
+
+
+async def regenerate_message_stream(db: Session, session_id: int, ai_message_id: int):
+    """
+    Regenerate a specific AI message.
+    1. Validate session and message.
+    2. Soft delete the old AI message.
+    3. Find the last user message as context.
+    4. Trigger background generation.
+    """
+    db_session = get_session(db, session_id)
+    if not db_session:
+        yield {"event": "error", "data": {"code": "session_not_found", "detail": "Session not found"}}
+        return
+
+    # 1. Validate Session State
+    if db_session.memory_generated != 0:
+        yield {"event": "error", "data": {"code": "session_archived", "detail": "Session is archived"}}
+        return
+
+    # 2. Get and Validate Target Message
+    old_ai_msg = db.query(Message).filter(Message.id == ai_message_id, Message.session_id == session_id).first()
+    if not old_ai_msg:
+        yield {"event": "error", "data": {"code": "message_not_found", "detail": "Message not found"}}
+        return
+    
+    if old_ai_msg.role != "assistant":
+        yield {"event": "error", "data": {"code": "invalid_role", "detail": "Can only regenerate assistant messages"}}
+        return
+
+    if old_ai_msg.deleted:
+        yield {"event": "error", "data": {"code": "message_deleted", "detail": "Message already deleted"}}
+        return
+
+    # Ensure it's the last message (or at least no user messages after it)
+    # Actually, for simplicity and safety, we only allow regenerating the very last message in the session.
+    last_msg = db.query(Message).filter(Message.session_id == session_id, Message.deleted == False).order_by(Message.create_time.desc(), Message.id.desc()).first()
+    if last_msg and last_msg.id != old_ai_msg.id:
+        yield {"event": "error", "data": {"code": "not_latest", "detail": "Can only regenerate the latest message"}}
+        return
+
+    # 3. Soft Delete Old AI Message
+    old_ai_msg.deleted = True
+    db.commit()
+    logger.info(f"[Regenerate] Soft deleted old AI message {old_ai_msg.id}")
+
+    # 4. Find Last User Message (Context)
+    last_user_msg = (
+        db.query(Message)
+        .filter(Message.session_id == session_id, Message.deleted == False, Message.role == "user")
+        .order_by(Message.create_time.desc(), Message.id.desc())
+        .first()
+    )
+
+    if not last_user_msg:
+         yield {"event": "error", "data": {"code": "no_context", "detail": "No user message found to reply to"}}
+         return
+
+    llm_config = db.query(LLMConfig).filter(LLMConfig.deleted == False).order_by(LLMConfig.id.desc()).first()
+    if not llm_config:
+        yield {"event": "error", "data": {"code": "config_not_found", "detail": "LLM configuration not found"}}
+        return
+
+    # 5. Create New AI Message Placeholder
+    new_ai_msg = Message(session_id=session_id, role="assistant", content="", friend_id=db_session.friend_id)
+    db.add(new_ai_msg)
+    db.commit()
+    db.refresh(new_ai_msg)
+
+    # 6. Start Background Generation Task
+    queue = asyncio.Queue()
+    
+    # Get thinking mode from global settings (frontend handles UI toggle state)
+    enable_thinking = SettingsService.get_setting(db, "chat", "thinking_enabled", False) 
+
+    
+    asyncio.create_task(_run_chat_generation_task(
+        session_id=session_id,
+        friend_id=db_session.friend_id,
+        user_msg_id=last_user_msg.id,
+        ai_msg_id=new_ai_msg.id,
+        message_content=last_user_msg.content, # Reuse last user content
+        enable_thinking=enable_thinking, 
+        queue=queue
+    ))
+
+    # 7. Stream events
+    yield {
+        "event": "start",
+        "data": {
+            "session_id": session_id,
+            "message_id": new_ai_msg.id, # New ID
+            "user_message_id": last_user_msg.id,
+            "model": llm_config.model_name,
+            "friend_id": db_session.friend_id,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+    }
+
+    while True:
+        event = await queue.get()
+        if event is None:
+            break
+        yield event
+
 
 
 def check_and_archive_expired_sessions(db: Session) -> int:

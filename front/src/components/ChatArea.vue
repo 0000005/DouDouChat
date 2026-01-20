@@ -268,6 +268,35 @@ const confirmRecall = async () => {
   }
 }
 
+const canRegenerate = (msg: any, index: number) => {
+  if (msg.role !== 'assistant') return false
+  if (sessionStore.isStreaming) return false // Disable while streaming to avoid conflicts
+
+  // Check if session is archived
+  if (msg.sessionId) {
+    const session = sessionStore.currentSessions.find(s => s.id === msg.sessionId)
+    if (session && session.memory_generated !== 0) {
+      return false
+    }
+  }
+
+  // Allow regeneration only for the last message
+  return index === messages.value.length - 1
+}
+
+const handleRegenerate = async (msg: any) => {
+  try {
+    await sessionStore.regenerateMessage(msg)
+  } catch (e: any) {
+    console.error(e)
+    const errorMsg = e?.message?.includes('archived') || e?.message?.includes('归档')
+      ? '会话已归档，无法重新生成'
+      : '重新生成失败'
+    triggerToast(errorMsg)
+  }
+}
+
+
 /**
  * ============================================================
  * Electron 模式检测与 Web 模式回退逻辑
@@ -544,6 +573,9 @@ const handleAvatarClick = (url: string) => {
                       <DropdownMenuContent align="start">
                         <DropdownMenuItem @click="handleCopyContent(segment)">
                           <span>复制</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem v-if="canRegenerate(msg, index)" @click="handleRegenerate(msg)">
+                          <span>重新回答</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
