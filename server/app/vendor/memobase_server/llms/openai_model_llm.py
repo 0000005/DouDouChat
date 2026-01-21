@@ -6,8 +6,17 @@ from ..env import LOG
 async def openai_complete(
     model, prompt, system_prompt=None, history_messages=[], **kwargs
 ) -> str:
+    def _supports_sampling(model_name: str | None) -> bool:
+        if not model_name:
+            return True
+        base = model_name.split("/", 1)[-1].lower()
+        return not base.startswith("gpt-5")
+
     sp_args, kwargs = exclude_special_kwargs(kwargs)
     prompt_id = sp_args.get("prompt_id", None)
+    if not _supports_sampling(model):
+        kwargs.pop("temperature", None)
+        kwargs.pop("top_p", None)
 
     openai_async_client = get_openai_async_client_instance()
     messages = []

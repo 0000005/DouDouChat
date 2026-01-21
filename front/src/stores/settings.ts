@@ -22,6 +22,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const eventTopk = ref<number>(5)
     const similarityThreshold = ref<number>(0.5)
     const activeEmbeddingConfigId = ref<number | null>(null)
+    const activeMemoryLlmConfigId = ref<number | null>(null)
 
     // ===== User 配置 =====
     const userAvatar = ref<string>('')
@@ -110,7 +111,8 @@ export const useSettingsStore = defineStore('settings', () => {
             search_rounds: searchRounds,
             event_topk: eventTopk,
             similarity_threshold: similarityThreshold,
-            active_embedding_config_id: activeEmbeddingConfigId
+            active_embedding_config_id: activeEmbeddingConfigId,
+            active_memory_llm_config_id: activeMemoryLlmConfigId
         })
 
     const saveMemorySettings = () =>
@@ -119,7 +121,8 @@ export const useSettingsStore = defineStore('settings', () => {
             search_rounds: searchRounds,
             event_topk: eventTopk,
             similarity_threshold: similarityThreshold,
-            active_embedding_config_id: activeEmbeddingConfigId
+            active_embedding_config_id: activeEmbeddingConfigId,
+            active_memory_llm_config_id: activeMemoryLlmConfigId
         })
 
     /**
@@ -160,6 +163,7 @@ export const useSettingsStore = defineStore('settings', () => {
         eventTopk,
         similarityThreshold,
         activeEmbeddingConfigId,
+        activeMemoryLlmConfigId,
         userAvatar,
         isLoading,
         isSaving,

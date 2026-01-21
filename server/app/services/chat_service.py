@@ -30,6 +30,14 @@ def _strip_message_tags(content: Optional[str]) -> Optional[str]:
     # 兜底：如果没有匹配到完整标签但包含标签字符，直接剔除所有标签文本
     return re.sub(r'</?message>', '', content).strip()
 
+def _model_base_name(model_name: Optional[str]) -> str:
+    if not model_name:
+        return ""
+    return model_name.split("/", 1)[-1].lower()
+
+def _supports_sampling(model_name: Optional[str]) -> bool:
+    return not _model_base_name(model_name).startswith("gpt-5")
+
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
 
@@ -790,12 +798,17 @@ async def _run_chat_generation_task(
 
         temperature = friend.temperature if friend and friend.temperature is not None else 0.8
         top_p = friend.top_p if friend and friend.top_p is not None else 0.9
-        model_settings_kwargs = {"temperature": temperature, "top_p": top_p}
-        if not enable_thinking:
-            model_settings_kwargs["reasoning"] = Reasoning(effort="none")
-        model_settings = ModelSettings(**model_settings_kwargs)
 
         model_name = llm_service.normalize_model_name(llm_config.model_name)
+        model_settings_kwargs = {}
+        if _supports_sampling(model_name):
+            model_settings_kwargs["temperature"] = temperature
+            model_settings_kwargs["top_p"] = top_p
+        if llm_config.capability_reasoning:
+            model_settings_kwargs["reasoning"] = Reasoning(
+                effort="low" if enable_thinking else "none"
+            )
+        model_settings = ModelSettings(**model_settings_kwargs)
         agent = Agent(
             name=friend_name,
             instructions=final_instructions,

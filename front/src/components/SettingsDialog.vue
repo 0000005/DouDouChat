@@ -85,6 +85,7 @@ const LLM_PROVIDER_PRESETS: Record<string, { label: string; baseUrl: string }> =
     zhipu: { label: '智谱 AI', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
     modelscope: { label: '魔搭社区', baseUrl: 'https://api-inference.modelscope.cn/v1' },
     minimax: { label: 'MiniMax', baseUrl: 'https://api.minimax.chat/v1' },
+    gemini: { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
     openai_compatible: { label: 'OpenAI (兼容)', baseUrl: '' }
 }
 
@@ -126,6 +127,7 @@ const {
     similarityThreshold,
     activeLlmConfigId,
     activeEmbeddingConfigId,
+    activeMemoryLlmConfigId,
     isSaving: isSettingsSaving
 } = storeToRefs(settingsStore)
 
@@ -582,6 +584,15 @@ const handleDeleteLlmConfig = () => {
         )
         return
     }
+    if (activeMemoryLlmConfigId.value === llmForm.value.id) {
+        showConfirmDialog(
+            '无法删除',
+            '该配置当前正在被记忆模块使用，请先切换到其他配置后再删除。',
+            () => {},
+            { confirmText: '知道了', showCancel: false }
+        )
+        return
+    }
     showConfirmDialog(
         '删除配置',
         `确定要删除「${llmForm.value.config_name || '未命名配置'}」吗？`,
@@ -749,6 +760,7 @@ watch(
 
 const activeLlmConfig = computed(() => llmStore.getConfigById(activeLlmConfigId.value))
 const activeEmbeddingConfig = computed(() => embeddingStore.getConfigById(activeEmbeddingConfigId.value))
+const activeMemoryLlmConfig = computed(() => llmStore.getConfigById(activeMemoryLlmConfigId.value))
 const canEnableThinking = computed(() => !!activeLlmConfig.value?.capability_reasoning)
 const canDeleteLlm = computed(() => !!llmForm.value.id || selectedLlmId.value === DRAFT_LLM_ID)
 const canDeleteEmbedding = computed(() => !!embeddingForm.value.id || selectedEmbeddingId.value === DRAFT_EMBEDDING_ID)
@@ -762,6 +774,12 @@ const activeEmbeddingConfigIdProxy = computed({
     get: () => (activeEmbeddingConfigId.value ? String(activeEmbeddingConfigId.value) : ''),
     set: (val: string) => {
         activeEmbeddingConfigId.value = val ? Number(val) : null
+    }
+})
+const activeMemoryLlmConfigIdProxy = computed({
+    get: () => (activeMemoryLlmConfigId.value ? String(activeMemoryLlmConfigId.value) : ''),
+    set: (val: string) => {
+        activeMemoryLlmConfigId.value = val ? Number(val) : null
     }
 })
 const currentTestStatus = computed(() => {
@@ -871,8 +889,12 @@ const openTutorial = () => {
                                                         @click.stop="discardLlmDraft">
                                                         <X class="w-3.5 h-3.5" />
                                                     </button>
+                                                    <span v-else-if="config.id === activeLlmConfigId && config.id === activeMemoryLlmConfigId"
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">聊天/记忆使用中</span>
                                                     <span v-else-if="config.id === activeLlmConfigId"
-                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">使用中</span>
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">聊天使用中</span>
+                                                    <span v-else-if="config.id === activeMemoryLlmConfigId"
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">记忆使用中</span>
                                                     <CheckCircle2 v-if="!config.__draft && config.is_verified"
                                                         class="w-3.5 h-3.5 text-emerald-500" />
                                                     <XCircle v-else-if="!config.__draft" class="w-3.5 h-3.5 text-gray-300" />
@@ -1123,6 +1145,34 @@ const openTutorial = () => {
                             <div>
                                 <h3 class="text-lg font-medium">记忆管理设置</h3>
                                 <p class="text-sm text-gray-500">配置会话管理和记忆关注维度。</p>
+                            </div>
+
+                            <div class="space-y-3">
+                                <label class="text-sm font-medium leading-none">选择记忆 LLM</label>
+                                <Select v-model="activeMemoryLlmConfigIdProxy" :disabled="!llmConfigs.length">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="未选择（将沿用聊天模型）" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem v-for="config in llmConfigs" :key="config.id"
+                                            :value="String(config.id)">
+                                            {{ config.config_name || LLM_PROVIDER_PRESETS[config.provider || 'openai']?.label || config.provider }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <div v-if="!llmConfigs.length" class="text-xs text-gray-400">
+                                    请先在「LLM 设置」中添加配置，
+                                    <button class="text-emerald-600 hover:underline" @click="originalSetTab('llm')">
+                                        立即前往
+                                    </button>
+                                </div>
+                                <div v-else-if="activeMemoryLlmConfig"
+                                    class="rounded-md border border-gray-200 bg-gray-50/60 px-3 py-2 text-xs text-gray-600">
+                                    <div>模型：{{ activeMemoryLlmConfig.model_name || '未设置' }}</div>
+                                    <div>供应商：{{ LLM_PROVIDER_PRESETS[activeMemoryLlmConfig.provider || 'openai']?.label ||
+                                        activeMemoryLlmConfig.provider }}</div>
+                                </div>
+                                <p class="text-xs text-gray-500">未选择时将使用聊天模型配置。</p>
                             </div>
 
                             <div class="space-y-3">

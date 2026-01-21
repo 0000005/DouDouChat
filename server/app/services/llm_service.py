@@ -11,6 +11,7 @@ class LLMService:
         "zhipu": "Zhipu",
         "modelscope": "ModelScope",
         "minimax": "MiniMax",
+        "gemini": "Google Gemini",
         "openai_compatible": "OpenAI Compatible",
     }
 
@@ -18,11 +19,14 @@ class LLMService:
     def normalize_model_name(model_name: str | None) -> str | None:
         """
         Normalize model name for agents MultiProvider.
-        SilliconFlow uses "Pro/..." model names; force OpenAI provider prefix.
+        Ensure OpenAI provider prefix for model names with vendor slashes.
         """
         if not model_name:
             return model_name
-        if model_name.startswith("Pro/"):
+        if "/" in model_name:
+            prefix, _ = model_name.split("/", 1)
+            if prefix in ("openai", "litellm"):
+                return model_name
             return f"openai/{model_name}"
         return model_name
 

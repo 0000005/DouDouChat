@@ -85,14 +85,21 @@ def reload_sdk_config():
     try:
         # Use a new session scope
         with SessionLocal() as db:
-            # 1.1 LLM Config
-            active_llm_id = SettingsService.get_setting(db, "chat", "active_llm_config_id", None)
-            if active_llm_id is not None:
+            # 1.1 LLM Config (memory-specific overrides chat)
+            active_memory_llm_id = SettingsService.get_setting(db, "memory", "active_memory_llm_config_id", None)
+            active_chat_llm_id = SettingsService.get_setting(db, "chat", "active_llm_config_id", None)
+            candidate_llm_ids = [
+                llm_id for llm_id in [active_memory_llm_id, active_chat_llm_id]
+                if isinstance(llm_id, int) and llm_id > 0
+            ]
+            for llm_id in candidate_llm_ids:
                 llm_config_db = (
                     db.query(LLMConfig)
-                    .filter(LLMConfig.id == active_llm_id, LLMConfig.deleted == False)
+                    .filter(LLMConfig.id == llm_id, LLMConfig.deleted == False)
                     .first()
                 )
+                if llm_config_db:
+                    break
             if llm_config_db:
                 if llm_config_db.api_key: llm_api_key = llm_config_db.api_key
                 if llm_config_db.base_url: llm_base_url = llm_config_db.base_url

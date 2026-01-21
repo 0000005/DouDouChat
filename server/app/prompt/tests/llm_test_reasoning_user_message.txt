@@ -1,0 +1,1 @@
+Solve this: (37 * 19) + 42. If a reasoning channel is available, put the reasoning there. Otherwise, include a short "Reasoning:" section followed by "Answer: <number>".
