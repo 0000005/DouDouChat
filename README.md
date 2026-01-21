@@ -11,6 +11,11 @@
 </p>
 
 <p align="center">
+  <strong>🌐 <a href="https://weagentchat.pages.dev/">官方网站 (Official Website)</a></strong>
+</p>
+
+<p align="center">
+
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Frontend-Vue3-42b883.svg" alt="Vue3"></a>
   <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/Backend-FastAPI-009688.svg" alt="FastAPI"></a>
@@ -296,10 +301,11 @@ WeAgentChat 的诞生离不开以下优秀的开源项目：
   如果这个项目对你有帮助，请给我们一个 ⭐ Star！
 </p>
 
-##  加入社区
+## 💬 加入社区
 
 扫描下方二维码加入我们的微信群，交流产品使用问题，获取最新动态：
 
-<p align center>
+<p align="center">
   <img src="website/assets/wechat_group.jpg" alt="WeChat Group" width="300">
 </p>
+
