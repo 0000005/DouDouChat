@@ -2,6 +2,7 @@ import { withApiBase } from './base'
 
 export interface ProfileAttributes {
     topic: string
+    sub_topic?: string
     [key: string]: any
 }
 

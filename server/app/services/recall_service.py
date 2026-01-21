@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from agents import Agent, Runner, function_tool, set_default_openai_api, set_default_openai_client
+from agents import Agent, Runner, RunConfig, function_tool, set_default_openai_api, set_default_openai_client
 from agents.items import ReasoningItem, ToolCallItem, ToolCallOutputItem
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
@@ -17,7 +17,6 @@ from app.prompt import get_prompt
 
 
 logger = logging.getLogger(__name__)
-prompt_logger = logging.getLogger("prompt_trace")
 
 
 class RecallService:
@@ -162,7 +161,7 @@ class RecallService:
             base_url=llm_config.base_url,
             api_key=llm_config.api_key,
         )
-        set_default_openai_client(client, use_for_tracing=False)
+        set_default_openai_client(client, use_for_tracing=True)
         set_default_openai_api("chat_completions")
 
         # 4. 初始化 RecallAgent
@@ -189,20 +188,12 @@ class RecallService:
         if not agent_messages:
             return {"injected_messages": [], "footprints": []}
 
-        prompt_logger.info(json.dumps({
-            "type": "memory_recall_prompt",
-            "source": "RecallService.perform_recall",
-            "friend_id": friend_id,
-            "model": model_name,
-            "instructions": instructions,
-            "messages": agent_messages,
-            "search_rounds": search_rounds,
-            "event_topk": event_topk,
-            "similarity_threshold": threshold,
-        }, ensure_ascii=False, default=str))
-
         # 执行 Agent 逻辑
-        result = await Runner.run(agent, agent_messages)
+        result = await Runner.run(
+            agent,
+            agent_messages,
+            run_config=RunConfig(trace_include_sensitive_data=True),
+        )
 
         # 6. 处理 Agent 运行结果，提取足迹和召回的事件
         tool_outputs: List[Dict[str, Any]] = []

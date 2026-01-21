@@ -84,6 +84,12 @@ def get_logging_config():
                 "filters": ["drop_openai_trace_key_warning"],
                 "propagate": False,
             },
+            "openai.agents.tracing": {
+                "handlers": ["prompt_file"],
+                "level": "DEBUG",
+                "filters": ["drop_openai_trace_key_warning"],
+                "propagate": False,
+            },
             "httpx": {
                 "handlers": ["console", "file"],
                 "level": "INFO",
@@ -124,7 +130,7 @@ def refresh_app_logging():
     # 2. 强力复活被 Uvicorn 禁用的 Logger (针对已经 import 的模块)
     # 这部分虽然看起来不优雅，但却是处理 Uvicorn disable_existing_loggers=True 最彻底的办法
     logger_manager = logging.Logger.manager
-    target_prefixes = ["app.", "app", "memobase_server", "prompt_trace"]
+    target_prefixes = ["app.", "app", "memobase_server", "prompt_trace", "openai.agents", "openai.agents.tracing"]
     
     for name, logger_obj in logger_manager.loggerDict.items():
         if isinstance(logger_obj, logging.Logger):

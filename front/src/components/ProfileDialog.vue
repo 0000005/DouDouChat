@@ -10,10 +10,17 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMemoryStore } from '@/stores/memory'
-import { Plus, Trash2, Edit2, Check, X, Loader2, Camera, Info } from 'lucide-vue-next'
+import { Plus, Edit2, Check, X, Loader2, Camera, Info, Trash2 } from 'lucide-vue-next'
 import AvatarUploader from '@/components/common/AvatarUploader.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { getStaticUrl } from '@/api/base'
@@ -29,13 +36,13 @@ const emit = defineEmits<{
 const memoryStore = useMemoryStore()
 const addingTopic = ref<string | null>(null) // Track which topic is being added to
 const newEntryContent = ref('')
+const newEntrySubTopic = ref<string | null>(null)
 const editingId = ref<string | null>(null)
 const editingContent = ref('')
+const editingTopic = ref<string>('')
+const editingSubTopic = ref<string | null>(null)
 const isAvatarUploaderOpen = ref(false)
 const settingsStore = useSettingsStore()
-const isAddingCategory = ref(false)
-const newCategoryName = ref('')
-const newCategoryDescription = ref('')
 
 // Confirmation Dialog State
 const confirmDialog = ref({
@@ -90,11 +97,19 @@ const initialize = async () => {
     await settingsStore.fetchUserSettings()
 }
 
+const getSubTopics = (topic: string) => {
+    return memoryStore.profileConfig.topics.find(t => t.topic === topic)?.sub_topics || []
+}
+
 const handleAddToTopic = async (topic: string) => {
     if (!newEntryContent.value.trim()) return
     try {
-        await memoryStore.upsertProfile(null, newEntryContent.value, { topic })
+        await memoryStore.upsertProfile(null, newEntryContent.value, {
+            topic,
+            sub_topic: newEntrySubTopic.value || undefined
+        })
         newEntryContent.value = ''
+        newEntrySubTopic.value = null
         addingTopic.value = null
     } catch (error) {
         console.error('Failed to add profile:', error)
@@ -104,70 +119,41 @@ const handleAddToTopic = async (topic: string) => {
 const startAddingToTopic = (topic: string) => {
     addingTopic.value = topic
     newEntryContent.value = ''
+    const subTopics = getSubTopics(topic)
+    newEntrySubTopic.value = subTopics[0]?.name || null
 }
 
 const cancelAddingToTopic = () => {
     addingTopic.value = null
     newEntryContent.value = ''
-}
-
-const handleAddCategory = async () => {
-    if (!newCategoryName.value.trim() || !newCategoryDescription.value.trim()) return
-    memoryStore.profileConfig.topics.push({
-        topic: newCategoryName.value.trim(),
-        description: newCategoryDescription.value.trim()
-    })
-    await memoryStore.saveConfig()
-    newCategoryName.value = ''
-    newCategoryDescription.value = ''
-    isAddingCategory.value = false
-}
-
-const handleRemoveCategory = async (index: number) => {
-    const topic = memoryStore.profileConfig.topics[index]
-    // Find all profiles under this topic
-    const profilesInTopic = memoryStore.profiles.filter(
-        p => p.attributes.topic === topic.topic
-    )
-    const profileCount = profilesInTopic.length
-
-    const message = profileCount > 0
-        ? `确定要删除分类「${topic.topic}」吗？\n\n该分类下有 ${profileCount} 条资料记录将被一并删除，此操作不可撤销。`
-        : `确定要删除分类「${topic.topic}」吗？`
-
-    showConfirmDialog(
-        '删除分类',
-        message,
-        async () => {
-            // 1. Delete all profiles under this topic first
-            if (profileCount > 0) {
-                const profileIds = profilesInTopic.map(p => p.id)
-                await memoryStore.removeProfiles(profileIds)
-            }
-            // 2. Remove the topic from config
-            memoryStore.profileConfig.topics.splice(index, 1)
-            await memoryStore.saveConfig()
-            // 3. Refresh profiles list
-            await memoryStore.fetchProfiles()
-        }
-    )
+    newEntrySubTopic.value = null
 }
 
 const startEdit = (id: string, content: string) => {
     editingId.value = id
     editingContent.value = content
+    const profile = memoryStore.profiles.find(p => p.id === id)
+    editingTopic.value = profile?.attributes.topic || ''
+    editingSubTopic.value = profile?.attributes.sub_topic || null
 }
 
 const cancelEdit = () => {
     editingId.value = null
     editingContent.value = ''
+    editingTopic.value = ''
+    editingSubTopic.value = null
 }
 
 const saveEdit = async (id: string, topic: string) => {
     if (!editingContent.value.trim()) return
     try {
-        await memoryStore.upsertProfile(id, editingContent.value, { topic })
+        await memoryStore.upsertProfile(id, editingContent.value, {
+            topic: editingTopic.value || topic,
+            sub_topic: editingSubTopic.value || undefined
+        })
         editingId.value = null
+        editingTopic.value = ''
+        editingSubTopic.value = null
     } catch (error) {
         console.error('Failed to update profile:', error)
     }
@@ -202,7 +188,8 @@ const vFocus = {
             </DialogHeader>
 
             <!-- Avatar Section -->
-            <div class="flex flex-col items-center py-4 bg-[linear-gradient(180deg,#ffffff_0%,#f7f7f7_100%)] border-b border-[#ededed] shrink-0">
+            <div
+                class="flex flex-col items-center py-4 bg-[linear-gradient(180deg,#ffffff_0%,#f7f7f7_100%)] border-b border-[#ededed] shrink-0">
                 <div class="relative group cursor-pointer" @click="isAvatarUploaderOpen = true">
                     <img :src="userAvatarDisplayUrl"
                         class="w-24 h-24 rounded-xl object-cover border border-[#e5e7eb] shadow-[0_8px_20px_-12px_rgba(0,0,0,0.35)] bg-gray-50 ring-2 ring-[#07c160]/20" />
@@ -219,7 +206,7 @@ const vFocus = {
                 <div class="flex items-center gap-2 text-[#07c160]/90">
                     <Info class="w-3.5 h-3.5" />
                     <p class="text-[11px] font-medium">
-                        提示：个人资料由 AI 随聊天进程自动更新，无需手动维护。
+                        提示：个人资料由 AI 随聊天进程自动更新；如需调整分类与子主题，请到「记忆设置」中修改。
                     </p>
                 </div>
             </div>
@@ -233,24 +220,25 @@ const vFocus = {
                     </div>
 
                     <template v-else>
-                        <Card v-for="(topic, index) in memoryStore.profileConfig.topics" :key="topic.topic"
+                        <Card v-for="topic in memoryStore.displayTopics" :key="topic.topic"
                             class="border border-[#ebecef] bg-white shadow-[0_10px_24px_-16px_rgba(0,0,0,0.35)] overflow-hidden mb-3 rounded-xl">
                             <CardHeader class="bg-[#fafafa] py-2 px-3 border-b border-[#efefef]">
                                 <CardTitle
                                     class="text-sm font-semibold text-[#2b2f33] flex items-center justify-between">
-                                    <span>{{ topic.topic }}</span>
+                                    <div class="flex items-center gap-2">
+                                        <span>{{ topic.topic }}</span>
+                                        <span v-if="topic.isUnconfigured"
+                                            class="text-[11px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200">
+                                            未配置
+                                        </span>
+                                    </div>
                                     <div class="flex items-center gap-2">
                                         <span class="text-xs font-normal text-gray-400 mr-2">{{ topic.description
                                         }}</span>
                                         <Button size="icon" variant="ghost"
                                             class="h-7 w-7 text-[#07c160] hover:text-[#06ad55] hover:bg-[#e9f8ef]"
-                                            @click="startAddingToTopic(topic.topic)">
+                                            :disabled="topic.isUnconfigured" @click="startAddingToTopic(topic.topic)">
                                             <Plus class="h-4 w-4" />
-                                        </Button>
-                                        <Button size="icon" variant="ghost"
-                                            class="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                                            @click="handleRemoveCategory(index)">
-                                            <Trash2 class="h-4 w-4" />
                                         </Button>
                                     </div>
                                 </CardTitle>
@@ -260,6 +248,17 @@ const vFocus = {
                                 <div v-if="addingTopic === topic.topic"
                                     class="p-2.5 border-b border-gray-100 bg-[#f6f7f8]">
                                     <div class="flex items-center gap-2">
+                                        <Select v-if="getSubTopics(topic.topic).length" v-model="newEntrySubTopic">
+                                            <SelectTrigger class="h-8 w-[140px] bg-white text-xs focus:ring-[#07c160]">
+                                                <SelectValue placeholder="选择子主题" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem v-for="st in getSubTopics(topic.topic)" :key="st.name"
+                                                    :value="st.name">
+                                                    {{ st.name }}
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                         <Input v-model="newEntryContent" placeholder="输入资料内容..."
                                             class="h-8 text-sm flex-1 bg-white focus-visible:ring-[#07c160]"
                                             @keyup.enter="handleAddToTopic(topic.topic)"
@@ -283,14 +282,42 @@ const vFocus = {
                                         class="group flex items-start gap-3 p-2.5 hover:bg-[#f7f8f9] transition-colors">
                                         <div class="flex-1">
                                             <div v-if="editingId === profile.id" class="flex items-center gap-2">
-                                                <Input v-model="editingContent"
-                                                    class="h-8 text-sm bg-white focus-visible:ring-[#07c160]"
-                                                    @keyup.enter="saveEdit(profile.id, topic.topic)"
-                                                    @keyup.esc="cancelEdit" v-focus />
+                                                <div class="flex items-center gap-2 w-full">
+                                                    <Select v-model="editingTopic">
+                                                        <SelectTrigger
+                                                            class="h-8 w-[140px] bg-white text-xs focus:ring-[#07c160]">
+                                                            <SelectValue placeholder="选择分类" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem v-for="t in memoryStore.profileConfig.topics"
+                                                                :key="t.topic" :value="t.topic">
+                                                                {{ t.topic }}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Select v-if="getSubTopics(editingTopic).length"
+                                                        v-model="editingSubTopic">
+                                                        <SelectTrigger
+                                                            class="h-8 w-[140px] bg-white text-xs focus:ring-[#07c160]">
+                                                            <SelectValue placeholder="选择子主题" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem v-for="st in getSubTopics(editingTopic)"
+                                                                :key="st.name" :value="st.name">
+                                                                {{ st.name }}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Input v-model="editingContent"
+                                                        class="h-8 text-sm bg-white focus-visible:ring-[#07c160] flex-1"
+                                                        @keyup.enter="saveEdit(profile.id, topic.topic)"
+                                                        @keyup.esc="cancelEdit" v-focus />
+                                                </div>
                                                 <Button size="icon" variant="ghost" class="h-8 w-8 text-[#07c160]"
                                                     @click="saveEdit(profile.id, topic.topic)">
                                                     <Check class="h-4 w-4" />
                                                 </Button>
+
                                                 <Button size="icon" variant="ghost" class="h-8 w-8 text-gray-400"
                                                     @click="cancelEdit">
                                                     <X class="h-4 w-4" />
@@ -299,20 +326,22 @@ const vFocus = {
                                             <div v-else
                                                 class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                                                 {{ profile.content }}
+                                                <span v-if="profile.attributes.sub_topic"
+                                                    class="ml-2 text-[11px] text-gray-400">#{{
+                                                        profile.attributes.sub_topic }}</span>
                                             </div>
                                         </div>
 
-                                        <div v-if="editingId !== profile.id"
-                                            class="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                                        <div v-if="editingId !== profile.id" class="flex items-center gap-1 shrink-0">
                                             <Button size="icon" variant="ghost"
                                                 class="h-8 w-8 text-gray-400 hover:text-[#07c160]"
                                                 @click="startEdit(profile.id, profile.content)">
                                                 <Edit2 class="h-4 w-4" />
                                             </Button>
                                             <Button size="icon" variant="ghost"
-                                                class="h-8 w-8 text-gray-400 hover:text-red-600"
+                                                class="h-8 w-8 text-red-500 hover:text-red-600"
                                                 @click="handleDelete(profile.id)">
-                                                <Trash2 class="h-4 w-4" />
+                                                <Trash2 class="h-4 w-4 text-red-500" color="#ef4444" />
                                             </Button>
                                         </div>
                                     </div>
@@ -324,32 +353,10 @@ const vFocus = {
             </ScrollArea>
 
             <div class="p-3 bg-white border-t border-[#ededed] shrink-0">
-                <div v-if="isAddingCategory"
-                    class="flex flex-col gap-2.5 p-3 bg-[#f7f8f9] rounded-xl border border-[#e6e8eb]">
-                    <div class="grid gap-2">
-                        <label class="text-xs font-medium text-gray-500">分类名称 *</label>
-                        <Input v-model="newCategoryName" placeholder="例如：兴趣爱好"
-                            class="h-8 text-sm bg-white focus-visible:ring-[#07c160]" />
-                    </div>
-                    <div class="grid gap-2">
-                        <label class="text-xs font-medium text-gray-500">引导说明 *</label>
-                        <Input v-model="newCategoryDescription" placeholder="例如：喜欢的事物、常去的地点等"
-                            class="h-8 text-sm bg-white focus-visible:ring-[#07c160]" @keyup.enter="handleAddCategory" />
-                    </div>
-                    <div class="flex justify-end gap-2 mt-1">
-                        <Button variant="outline" size="sm" class="h-8"
-                            @click="isAddingCategory = false; newCategoryName = ''; newCategoryDescription = ''">取消</Button>
-                        <Button size="sm" class="h-8 bg-[#07c160] hover:bg-[#06ad55]"
-                            :disabled="!newCategoryName.trim() || !newCategoryDescription.trim()"
-                            @click="handleAddCategory">确认</Button>
-                    </div>
+                <div
+                    class="flex items-center justify-between text-xs text-gray-500 bg-[#f7f8f9] rounded-xl border border-[#e6e8eb] px-3 py-2.5">
+                    <span>分类与子主题需在「记忆设置」中维护</span>
                 </div>
-                <Button v-else variant="outline"
-                    class="w-full border-dashed border-gray-300 py-6 text-gray-500 hover:text-[#07c160] hover:border-[#07c160]"
-                    @click="isAddingCategory = true">
-                    <Plus class="w-4 h-4 mr-2" />
-                    新增分类
-                </Button>
             </div>
 
             <DialogFooter class="hidden">
@@ -360,7 +367,8 @@ const vFocus = {
 
     <!-- Confirmation Dialog -->
     <Dialog :open="confirmDialog.open" @update:open="(val) => confirmDialog.open = val">
-        <DialogContent class="sm:max-w-md rounded-2xl border border-[#e6e6e6] shadow-[0_18px_50px_-20px_rgba(0,0,0,0.35)]">
+        <DialogContent
+            class="sm:max-w-md rounded-2xl border border-[#e6e6e6] shadow-[0_18px_50px_-20px_rgba(0,0,0,0.35)]">
             <DialogHeader class="pb-2">
                 <DialogTitle class="text-base font-semibold text-[#111]">{{ confirmDialog.title }}</DialogTitle>
             </DialogHeader>

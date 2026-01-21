@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Optional
 
-from agents import Agent, Runner, set_default_openai_api, set_default_openai_client
+from agents import Agent, Runner, RunConfig, set_default_openai_api, set_default_openai_client
 from fastapi import HTTPException
 from openai import AsyncOpenAI
 from openai.types.responses import ResponseOutputText, ResponseTextDeltaEvent
@@ -43,7 +43,7 @@ class PersonaGeneratorService:
             base_url=llm_config.base_url,
             api_key=llm_config.api_key,
         )
-        set_default_openai_client(client, use_for_tracing=False)
+        set_default_openai_client(client, use_for_tracing=True)
         set_default_openai_api("chat_completions")
 
         # 3. 初始化 GeneratorAgent
@@ -63,7 +63,11 @@ class PersonaGeneratorService:
 
         # 5. 运行 Agent
         try:
-            result = await Runner.run(agent, user_input)
+            result = await Runner.run(
+                agent,
+                user_input,
+                run_config=RunConfig(trace_include_sensitive_data=True),
+            )
         except Exception as e:
             logger.error(f"LLM call failed: {e}")
             raise HTTPException(
@@ -128,7 +132,7 @@ class PersonaGeneratorService:
             base_url=llm_config.base_url,
             api_key=llm_config.api_key,
         )
-        set_default_openai_client(client, use_for_tracing=False)
+        set_default_openai_client(client, use_for_tracing=True)
         set_default_openai_api("chat_completions")
 
         instructions = get_prompt("persona/generate_instructions.txt").strip()
@@ -145,7 +149,11 @@ class PersonaGeneratorService:
 
         full_content = ""
         try:
-            result = Runner.run_streamed(agent, user_input)
+            result = Runner.run_streamed(
+                agent,
+                user_input,
+                run_config=RunConfig(trace_include_sensitive_data=True),
+            )
             async for event in result.stream_events():
                 if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
                     delta = event.data.delta

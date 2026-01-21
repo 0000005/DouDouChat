@@ -6,6 +6,8 @@ from alembic.config import Config
 from app.core.config import settings
 from app.vendor.memobase_server.connectors import init_db as init_memo_db, Session as MemoSession
 from app.vendor.memobase_server.models.database import Project as MemoProject
+from app.services.memo.constants import DEFAULT_SPACE_ID
+from app.services.memo.default_profile_config import get_default_profile_config_yaml
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -111,6 +113,14 @@ def init_db():
         init_memo_db(settings.MEMOBASE_DB_URL)
         with MemoSession() as session:
             MemoProject.initialize_root_project(session)
+            root_project = (
+                session.query(MemoProject)
+                .filter(MemoProject.project_id == DEFAULT_SPACE_ID)
+                .one_or_none()
+            )
+            if root_project and not (root_project.profile_config or "").strip():
+                root_project.profile_config = get_default_profile_config_yaml()
+                session.commit()
         logger.info("Memobase static data initialized successfully.")
     except Exception as e:
         logger.error(f"Error initializing Memobase static data: {e}")

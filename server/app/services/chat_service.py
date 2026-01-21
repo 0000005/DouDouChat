@@ -33,7 +33,6 @@ def _strip_message_tags(content: Optional[str]) -> Optional[str]:
 
 # Initialize logger for this module
 logger = logging.getLogger(__name__)
-prompt_logger = logging.getLogger("prompt_trace")
 
 # SSE Debug logger
 sse_logger = logging.getLogger("sse_debug")
@@ -49,7 +48,7 @@ from openai.types.responses import (
     ResponseOutputText,
     ResponseTextDeltaEvent,
 )
-from agents import Agent, ModelSettings, Runner, set_default_openai_client, set_default_openai_api
+from agents import Agent, ModelSettings, RunConfig, Runner, set_default_openai_client, set_default_openai_api
 from agents.items import MessageOutputItem, ReasoningItem, ToolCallItem, ToolCallOutputItem
 from agents.stream_events import RunItemStreamEvent
 
@@ -784,7 +783,7 @@ async def _run_chat_generation_task(
         agent_messages.append({"role": "user", "content": message_content})
 
         client = AsyncOpenAI(base_url=llm_config.base_url, api_key=llm_config.api_key)
-        set_default_openai_client(client, use_for_tracing=False)
+        set_default_openai_client(client, use_for_tracing=True)
         set_default_openai_api("chat_completions")
 
         temperature = friend.temperature if friend and friend.temperature is not None else 0.8
@@ -815,7 +814,11 @@ async def _run_chat_generation_task(
         THINK_START = "<think>"
         THINK_END = "</think>"
         
-        result = Runner.run_streamed(agent, agent_messages)
+        result = Runner.run_streamed(
+            agent,
+            agent_messages,
+            run_config=RunConfig(trace_include_sensitive_data=True),
+        )
         async for event in result.stream_events():
             if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
                 if enable_thinking and isinstance(event.item, ReasoningItem):

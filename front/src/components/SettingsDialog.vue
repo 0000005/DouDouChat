@@ -5,6 +5,8 @@ import {
     DialogContent,
     DialogTitle,
     DialogDescription,
+    DialogHeader,
+    DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -78,6 +80,32 @@ const testMessage = ref('')
 const activeTab = ref(props.defaultTab || 'llm')
 const showApiKey = ref(false)
 
+// Confirmation Dialog State
+const confirmDialog = ref({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: () => { }
+})
+
+const showConfirmDialog = (title: string, message: string, onConfirm: () => void) => {
+    confirmDialog.value = {
+        open: true,
+        title,
+        message,
+        onConfirm
+    }
+}
+
+const handleConfirm = () => {
+    confirmDialog.value.onConfirm()
+    confirmDialog.value.open = false
+}
+
+const handleCancel = () => {
+    confirmDialog.value.open = false
+}
+
 // Watch for changes in defaultTab when the dialog opens
 watch(() => props.open, (newVal) => {
     if (newVal && props.defaultTab) {
@@ -128,12 +156,48 @@ const handleSave = async () => {
 const handleAddTopic = () => {
     memoryStore.profileConfig.topics.push({
         topic: '新分类',
-        description: '请输入分类描述'
+        description: '请输入分类描述',
+        sub_topics: []
     })
 }
 
-const handleRemoveTopic = (index: number) => {
-    memoryStore.profileConfig.topics.splice(index, 1)
+const handleRemoveTopic = async (index: number) => {
+    const topic = memoryStore.profileConfig.topics[index]
+    if (!topic) return
+    await memoryStore.fetchProfiles()
+    const profilesInTopic = memoryStore.profiles.filter(
+        p => p.attributes.topic === topic.topic
+    )
+    const profileCount = profilesInTopic.length
+    const message = profileCount > 0
+        ? `确定要删除分类「${topic.topic}」吗？\n\n该分类下有 ${profileCount} 条资料记录将被一并删除，此操作不可撤销。`
+        : `确定要删除分类「${topic.topic}」吗？`
+
+    showConfirmDialog(
+        '删除分类',
+        message,
+        async () => {
+            if (profileCount > 0) {
+                const profileIds = profilesInTopic.map(p => p.id)
+                await memoryStore.removeProfiles(profileIds)
+            }
+            memoryStore.profileConfig.topics.splice(index, 1)
+            await memoryStore.saveConfig()
+            await memoryStore.fetchProfiles()
+        }
+    )
+}
+
+const handleAddSubTopic = (topic: any) => {
+    if (!topic.sub_topics) {
+        topic.sub_topics = []
+    }
+    topic.sub_topics.push({ name: '新子主题', description: '' })
+}
+
+const handleRemoveSubTopic = (topic: any, index: number) => {
+    if (!topic.sub_topics) return
+    topic.sub_topics.splice(index, 1)
 }
 
 const handleTest = async () => {
@@ -400,6 +464,16 @@ const openTutorial = () => {
                                 </div>
                             </div>
 
+                            <div class="space-y-4 border-t pt-6">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-sm font-medium">启用严格模式</label>
+                                    <Switch v-model="memoryStore.profileConfig.strictMode" />
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    严格模式下仅允许在已配置的主题/子主题内抽取，避免出现未定义分类。
+                                </p>
+                            </div>
+
                             <!-- Schema Builder -->
                             <div class="space-y-4 border-t pt-6">
                                 <div class="flex items-center justify-between">
@@ -437,6 +511,35 @@ const openTutorial = () => {
                                                 <label class="text-xs font-medium text-gray-500">提取引导说明</label>
                                                 <Input v-model="topic.description" class="h-8 text-sm"
                                                     placeholder="描述此分类关注的信息点..." />
+                                            </div>
+                                            <div class="grid gap-2">
+                                                <div class="flex items-center justify-between">
+                                                    <label class="text-xs font-medium text-gray-500">子主题</label>
+                                                    <Button variant="ghost" size="sm"
+                                                        class="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                                        @click="handleAddSubTopic(topic)">
+                                                        <Plus class="w-3 h-3 mr-1" />
+                                                        添加子主题
+                                                    </Button>
+                                                </div>
+                                                <div v-if="!topic.sub_topics?.length"
+                                                    class="text-xs text-gray-400 bg-gray-50 rounded-md px-3 py-2 border border-dashed">
+                                                    暂无子主题
+                                                </div>
+                                                <div v-else class="space-y-2">
+                                                    <div v-for="(sub, subIndex) in topic.sub_topics" :key="subIndex"
+                                                        class="flex items-center gap-2">
+                                                        <Input v-model="sub.name" class="h-8 text-sm flex-1"
+                                                            placeholder="子主题名称" />
+                                                        <Input v-model="sub.description" class="h-8 text-sm flex-1"
+                                                            placeholder="说明（可选）" />
+                                                        <Button variant="ghost" size="icon"
+                                                            class="h-8 w-8 text-gray-400 hover:text-red-500"
+                                                            @click="handleRemoveSubTopic(topic, subIndex)">
+                                                            <Trash2 :size="14" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -497,6 +600,22 @@ const openTutorial = () => {
                 </div>
             </div>
 
+        </DialogContent>
+    </Dialog>
+
+    <!-- Confirmation Dialog -->
+    <Dialog :open="confirmDialog.open" @update:open="(val) => confirmDialog.open = val">
+        <DialogContent class="sm:max-w-md rounded-2xl border border-[#e6e6e6] shadow-[0_18px_50px_-20px_rgba(0,0,0,0.35)]">
+            <DialogHeader class="pb-2">
+                <DialogTitle class="text-base font-semibold text-[#111]">{{ confirmDialog.title }}</DialogTitle>
+            </DialogHeader>
+            <div class="py-4">
+                <p class="text-sm text-gray-600 whitespace-pre-line">{{ confirmDialog.message }}</p>
+            </div>
+            <DialogFooter class="flex gap-2">
+                <Button variant="outline" @click="handleCancel">取消</Button>
+                <Button class="bg-red-600 hover:bg-red-700" @click="handleConfirm">确认删除</Button>
+            </DialogFooter>
         </DialogContent>
     </Dialog>
 </template>
