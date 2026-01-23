@@ -12,6 +12,7 @@ from app.schemas import chat as chat_schemas
 from datetime import datetime, timedelta, timezone
 from app.services.recall_service import RecallService
 from app.services.settings_service import SettingsService
+from app.services import provider_rules
 from app.services.llm_service import llm_service
 from app.services.embedding_service import embedding_service
 from app.services.memo.bridge import MemoService
@@ -37,48 +38,6 @@ def _model_base_name(model_name: Optional[str]) -> str:
 
 def _supports_sampling(model_name: Optional[str]) -> bool:
     return not _model_base_name(model_name).startswith("gpt-5")
-
-def _is_gemini_model(llm_config, model_name: Optional[str]) -> bool:
-    provider = (getattr(llm_config, "provider", "") or "").lower()
-    base_url = (getattr(llm_config, "base_url", "") or "").lower()
-    if provider == "gemini":
-        return True
-    if "generativelanguage.googleapis.com" in base_url:
-        return True
-    return "gemini" in _model_base_name(model_name)
-
-def _normalize_gemini_litellm_model_name(model_name: Optional[str]) -> str:
-    raw = (model_name or "").strip()
-    if not raw:
-        return "gemini/gemini-3-pro-preview"
-    if "/" in raw:
-        prefix, rest = raw.split("/", 1)
-        if prefix in ("gemini", "vertex_ai", "google"):
-            return raw
-        return f"gemini/{rest}"
-    return f"gemini/{raw}"
-
-def _normalize_gemini_base_url(base_url: Optional[str]) -> Optional[str]:
-    raw = (base_url or "").strip()
-    if not raw:
-        return None
-    trimmed = raw.rstrip("/")
-    if trimmed.endswith("/openai"):
-        return trimmed[: -len("/openai")]
-    return raw
-
-def _supports_reasoning_effort(llm_config) -> bool:
-    provider = (getattr(llm_config, "provider", "") or "").lower()
-    base_url = (getattr(llm_config, "base_url", "") or "").lower()
-    if provider in ("openai", "deepseek"):
-        return True
-    if provider == "openai_compatible":
-        if "openai.com" in base_url or "deepseek" in base_url:
-            return True
-        return False
-    if "deepseek" in base_url:
-        return True
-    return False
 
 def _extract_reasoning_text(raw: object) -> str:
     if raw is None:
@@ -746,7 +705,7 @@ async def _run_chat_generation_task(
 
         raw_model_name = llm_config.model_name
         model_name = llm_service.normalize_model_name(raw_model_name)
-        force_thinking = _is_gemini_model(llm_config, raw_model_name)
+        force_thinking = provider_rules.is_gemini_model(llm_config, raw_model_name)
         if enable_thinking and not llm_config.capability_reasoning and not force_thinking:
             enable_thinking = False
 
@@ -892,12 +851,16 @@ async def _run_chat_generation_task(
         temperature = friend.temperature if friend and friend.temperature is not None else 0.8
         top_p = friend.top_p if friend and friend.top_p is not None else 0.9
 
-        use_litellm = force_thinking
+        use_litellm = provider_rules.should_use_litellm(llm_config, raw_model_name)
         model_settings_kwargs = {}
         if _supports_sampling(model_name):
             model_settings_kwargs["temperature"] = temperature
             model_settings_kwargs["top_p"] = top_p
-        if llm_config.capability_reasoning and not use_litellm and _supports_reasoning_effort(llm_config):
+        if (
+            llm_config.capability_reasoning
+            and not use_litellm
+            and provider_rules.supports_reasoning_effort(llm_config)
+        ):
             model_settings_kwargs["reasoning"] = Reasoning(
                 effort="low" if enable_thinking else "none"
             )
@@ -907,8 +870,8 @@ async def _run_chat_generation_task(
         if use_litellm:
             from agents.extensions.models.litellm_model import LitellmModel
 
-            gemini_model_name = _normalize_gemini_litellm_model_name(raw_model_name)
-            gemini_base_url = _normalize_gemini_base_url(llm_config.base_url)
+            gemini_model_name = provider_rules.normalize_gemini_model_name(raw_model_name)
+            gemini_base_url = provider_rules.normalize_gemini_base_url(llm_config.base_url)
             agent_model = LitellmModel(
                 model=gemini_model_name,
                 base_url=gemini_base_url,
@@ -1082,7 +1045,7 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         yield {"event": "error", "data": {"code": "config_not_found", "detail": "LLM configuration not found"}}
         return
     model_name = llm_config.model_name
-    force_thinking = _is_gemini_model(llm_config, model_name)
+    force_thinking = provider_rules.is_gemini_model(llm_config, model_name)
     effective_enable_thinking = message_in.enable_thinking and (
         bool(llm_config.capability_reasoning) or force_thinking
     )
@@ -1205,7 +1168,7 @@ async def regenerate_message_stream(db: Session, session_id: int, ai_message_id:
     # Get thinking mode from global settings (frontend handles UI toggle state)
     enable_thinking = SettingsService.get_setting(db, "chat", "enable_thinking", False)
     model_name = llm_config.model_name
-    force_thinking = _is_gemini_model(llm_config, model_name)
+    force_thinking = provider_rules.is_gemini_model(llm_config, model_name)
     if enable_thinking and not llm_config.capability_reasoning and not force_thinking:
         enable_thinking = False
 

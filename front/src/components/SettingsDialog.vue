@@ -889,11 +889,11 @@ const openTutorial = () => {
                                                         <X class="w-3.5 h-3.5" />
                                                     </button>
                                                     <span v-else-if="config.id === activeLlmConfigId && config.id === activeMemoryLlmConfigId"
-                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">聊天/记忆使用中</span>
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 whitespace-nowrap">聊天/记忆使用中</span>
                                                     <span v-else-if="config.id === activeLlmConfigId"
-                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">聊天使用中</span>
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 whitespace-nowrap">聊天使用中</span>
                                                     <span v-else-if="config.id === activeMemoryLlmConfigId"
-                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">记忆使用中</span>
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 whitespace-nowrap">记忆使用中</span>
                                                     <CheckCircle2 v-if="!config.__draft && config.is_verified"
                                                         class="w-3.5 h-3.5 text-emerald-500" />
                                                     <XCircle v-else-if="!config.__draft" class="w-3.5 h-3.5 text-gray-300" />
@@ -1050,7 +1050,7 @@ const openTutorial = () => {
                                                         <X class="w-3.5 h-3.5" />
                                                     </button>
                                                     <span v-else-if="config.id === activeEmbeddingConfigId"
-                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">使用中</span>
+                                                        class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 whitespace-nowrap">使用中</span>
                                                     <CheckCircle2 v-if="!config.__draft && config.is_verified"
                                                         class="w-3.5 h-3.5 text-emerald-500" />
                                                     <XCircle v-else-if="!config.__draft" class="w-3.5 h-3.5 text-gray-300" />
