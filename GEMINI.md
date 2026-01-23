@@ -76,7 +76,7 @@ This script will simultaneously launch the Backend API and Frontend Dev Server.
 *   **Structure:** Layered Architecture (API -> Service -> Models/Schemas)
 *   **API Prefix:** `/api`
 
-#### Provider 适配规则（新增）
+#### Provider 适配规则
 为降低多模型接入的维护成本，provider 级差异被集中到一个轻量规则模块：
 *   **规则集中位置：** `server/app/services/provider_rules.py`
 *   **职责范围（provider 级）：**
@@ -86,10 +86,7 @@ This script will simultaneously launch the Backend API and Frontend Dev Server.
     *   Gemini `thought_signature`、DeepSeek `reasoning` 注入等特殊要求
 *   **模型能力来源（model 级）：** 仍由数据库中的模型配置决定（工具调用/思考/视觉/联网等）
 
-**新增 provider 的维护入口：**
-1. 在数据库中新增/配置模型能力（工具调用/思考/视觉/联网等）。
-2. 如有协议差异或特殊字段要求，仅修改 `server/app/services/provider_rules.py`。
-3. 业务逻辑（`chat_service.py` / `recall_service.py`）不应再新增 provider 分支。
+
 
 ### Desktop (`electron/`)
 *   **Framework:** Electron 32+
