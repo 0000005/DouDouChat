@@ -1,0 +1,59 @@
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, JSON, Index, UniqueConstraint
+from sqlalchemy.orm import relationship
+from app.db.base import Base
+from app.db.types import UTCDateTime, utc_now
+
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(128), nullable=False)
+    avatar = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    owner_id = Column(String(64), nullable=False)
+    auto_reply = Column(Boolean, default=True, nullable=False)
+    create_time = Column(UTCDateTime, default=utc_now, nullable=False)
+    update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    # Relationships
+    members = relationship("GroupMember", back_populates="group", cascade="all, delete-orphan")
+    messages = relationship("GroupMessage", back_populates="group", cascade="all, delete-orphan")
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    member_id = Column(String(64), nullable=False) # Can be user UUID or friend ID as string
+    member_type = Column(String(20), nullable=False) # 'user' or 'friend'
+    join_time = Column(UTCDateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('group_id', 'member_id', name='uq_group_member'),
+    )
+
+    # Relationships
+    group = relationship("Group", back_populates="members")
+
+
+class GroupMessage(Base):
+    __tablename__ = "group_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    sender_id = Column(String(64), nullable=False)
+    sender_type = Column(String(20), nullable=False) # 'user' or 'friend'
+    content = Column(Text, nullable=False)
+    message_type = Column(String(20), default="text", nullable=False) # 'text', 'system', '@'
+    mentions = Column(JSON, nullable=True) # List of member IDs
+    create_time = Column(UTCDateTime, default=utc_now, nullable=False)
+    update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        Index('ix_group_messages_group_id_create_time', 'group_id', 'create_time'),
+    )
+
+    # Relationships
+    group = relationship("Group", back_populates="messages")
