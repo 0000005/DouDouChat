@@ -21,6 +21,7 @@ export interface Message {
     createdAt: number
     sessionId?: number
     senderId?: string
+    senderType?: string
 }
 
 /**
@@ -287,14 +288,47 @@ export const useSessionStore = defineStore('session', () => {
         }
     }
 
-    const selectGroup = (groupId: number) => {
+    const selectGroup = async (groupId: number) => {
         currentGroupId.value = groupId
         currentFriendId.value = null
         chatType.value = 'group'
         currentSessionId.value = null
 
-        // TODO: Fetch group messages when backend follows up with group chat logic
-        // For now, it's a skeleton for UI 09-03
+        // Fetch group messages
+        isLoading.value = true
+        try {
+            await fetchGroupMessages(groupId)
+        } finally {
+            isLoading.value = false
+        }
+    }
+
+    const fetchGroupMessages = async (groupId: number, skip: number = 0, limit: number = INITIAL_MESSAGE_LIMIT) => {
+        const { groupApi } = await import('@/api/group')
+        try {
+            const apiMessages = await groupApi.getGroupMessages(groupId, skip, limit)
+            const mappedMessages: Message[] = apiMessages.map(m => ({
+                id: m.id,
+                role: (m.sender_type === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+                content: m.content,
+                createdAt: new Date(m.create_time).getTime(),
+                senderId: m.sender_id,
+                senderType: m.sender_type
+            }))
+
+            if (skip === 0) {
+                messagesMap.value[groupId] = mappedMessages
+            } else {
+                const currentMsgs = messagesMap.value[groupId] || []
+                const existingIds = new Set(currentMsgs.map(m => m.id))
+                const newMsgs = mappedMessages.filter(m => !existingIds.has(m.id))
+                messagesMap.value[groupId] = [...newMsgs, ...currentMsgs]
+            }
+            return apiMessages.length
+        } catch (error) {
+            console.error(`Failed to fetch messages for group ${groupId}:`, error)
+            return 0
+        }
     }
 
     // Send message to current friend
@@ -305,7 +339,7 @@ export const useSessionStore = defineStore('session', () => {
 
         // 1. Add user message locally
         const userMsg: Message = {
-            id: Date.now(),
+            id: -(Date.now() + Math.random()),
             role: 'user',
             content: content,
             createdAt: Date.now()
@@ -461,6 +495,80 @@ export const useSessionStore = defineStore('session', () => {
             friendStore.updateLastMessage(friendId, contentBuffer || '[消息发送失败]', 'assistant')
         } finally {
             streamingMap.value[friendId] = false
+        }
+    }
+
+    // Send message to current group
+    const sendGroupMessage = async (content: string, mentions: string[] = []) => {
+        if (!currentGroupId.value) return
+
+        const groupId = currentGroupId.value
+        const { groupApi } = await import('@/api/group')
+
+        // 1. Add user message locally
+        const userMsg: Message = {
+            id: -(Date.now() + Math.random()),
+            role: 'user',
+            content: content,
+            createdAt: Date.now(),
+            senderId: 'user'
+        }
+
+        if (!messagesMap.value[groupId]) {
+            messagesMap.value[groupId] = []
+        }
+        messagesMap.value[groupId].push(userMsg)
+
+        // Map friend IDs to track streaming content for each friend
+        const aiMessages: Record<string, Message> = {}
+
+        try {
+            const stream = groupApi.sendGroupMessageStream(groupId, { content, mentions })
+            streamingMap.value[groupId] = true
+
+            for await (const { event, data } of stream) {
+                if (event === 'start') {
+                    // Update user message ID
+                    if (data.message_id) {
+                        const localMsg = messagesMap.value[groupId].find(m => m.id === userMsg.id)
+                        if (localMsg) localMsg.id = data.message_id
+                    }
+                } else if (event === 'message' || event === 'thinking') {
+                    const senderId = data.sender_id
+                    if (!senderId) continue
+
+                    // If we haven't seen this AI friend yet in this interaction, create a placeholder
+                    if (!aiMessages[senderId]) {
+                        aiMessages[senderId] = {
+                            id: -(Date.now() + Math.random()),
+                            role: 'assistant',
+                            content: '',
+                            thinkingContent: '',
+                            createdAt: Date.now(),
+                            senderId: senderId
+                        }
+                        messagesMap.value[groupId].push(aiMessages[senderId])
+                    }
+
+                    if (event === 'message') {
+                        aiMessages[senderId].content += data.delta || ''
+                    } else if (event === 'thinking') {
+                        aiMessages[senderId].thinkingContent = (aiMessages[senderId].thinkingContent || '') + (data.delta || '')
+                    }
+                } else if (event === 'done') {
+                    const senderId = data.sender_id
+                    if (senderId && aiMessages[senderId]) {
+                        aiMessages[senderId].id = data.message_id
+                        aiMessages[senderId].content = data.content
+                    }
+                } else if (event === 'error') {
+                    console.error('Group stream error:', data)
+                }
+            }
+        } catch (error) {
+            console.error('Failed to send group message:', error)
+        } finally {
+            streamingMap.value[groupId] = false
         }
     }
 
@@ -680,7 +788,9 @@ export const useSessionStore = defineStore('session', () => {
         selectFriend,
         selectGroup,
         sendMessage,
+        sendGroupMessage,
         fetchFriendMessages,
+        fetchGroupMessages,
         loadMoreMessages,
         syncLatestMessages,
         fetchFriendSessions,

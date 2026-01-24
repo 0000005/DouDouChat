@@ -13,5 +13,7 @@ const props = defineProps<Props>()
 </script>
 
 <template>
-  <CommandList :class="cn(props.class)" v-bind="props" />
+  <CommandList :class="cn(props.class)" v-bind="props">
+    <slot />
+  </CommandList>
 </template>

@@ -2,8 +2,12 @@
 import type { HTMLAttributes } from 'vue'
 import { InputGroupTextarea } from '@/components/ui/input-group'
 import { cn } from '@/lib/utils'
-import { computed, ref } from 'vue'
+import { ref, watch, useAttrs } from 'vue'
 import { usePromptInput } from './context'
+
+defineOptions({
+  inheritAttrs: false
+})
 
 type PromptInputTextareaProps = InstanceType<typeof InputGroupTextarea>['$props']
 
@@ -12,11 +16,37 @@ interface Props extends /* @vue-ignore */ PromptInputTextareaProps {
 }
 
 const props = defineProps<Props>()
+const modelValue = defineModel<string>()
+const attrs = useAttrs()
 
 const { textInput, setTextInput, submitForm, addFiles, files, removeFile } = usePromptInput()
 const isComposing = ref(false)
 
+// Sync with context
+watch(() => modelValue.value, (val) => {
+  if (val !== undefined && val !== textInput.value) {
+    setTextInput(val)
+  }
+}, { immediate: true })
+
+watch(textInput, (val) => {
+  if (val !== modelValue.value) {
+    modelValue.value = val
+  }
+})
+
 function handleKeyDown(e: KeyboardEvent) {
+  // First, call parent's keydown handler if provided
+  const parentOnKeydown = attrs.onKeydown as ((e: KeyboardEvent) => void) | undefined
+  if (parentOnKeydown) {
+    parentOnKeydown(e)
+  }
+  
+  // If parent prevented default (e.g., for mention menu navigation), stop here
+  if (e.defaultPrevented) {
+    return
+  }
+  
   if (e.key === 'Enter') {
     if (isComposing.value || e.shiftKey)
       return
@@ -30,6 +60,14 @@ function handleKeyDown(e: KeyboardEvent) {
     if (lastFile) {
       removeFile(lastFile.id)
     }
+  }
+}
+
+function handleInput(e: Event) {
+  // Call parent's input handler if provided
+  const parentOnInput = attrs.onInput as ((e: Event) => void) | undefined
+  if (parentOnInput) {
+    parentOnInput(e)
   }
 }
 
@@ -53,20 +91,21 @@ function handlePaste(e: ClipboardEvent) {
   }
 }
 
-const modelValue = computed({
-  get: () => textInput.value,
-  set: val => setTextInput(val),
-})
+// Filter out event handlers from attrs to avoid double binding
+const filteredAttrs = Object.fromEntries(
+  Object.entries(attrs).filter(([key]) => !key.startsWith('on'))
+)
 </script>
 
 <template>
   <InputGroupTextarea
-    v-model="modelValue"
-    placeholder="What would you like to know?"
+    v-model="textInput"
+    v-bind="filteredAttrs"
+    :placeholder="props.placeholder ?? '输入消息...'"
     name="message"
     :class="cn('field-sizing-content max-h-48 min-h-16', props.class)"
-    v-bind="props"
     @keydown="handleKeyDown"
+    @input="handleInput"
     @paste="handlePaste"
     @compositionstart="isComposing = true"
     @compositionend="isComposing = false"

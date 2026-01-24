@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useSessionStore, parseMessageSegments } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
 import { useGroupStore } from '@/stores/group'
@@ -30,6 +30,13 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog'
+import {
+  PromptInputCommand,
+  PromptInputCommandEmpty,
+  PromptInputCommandGroup,
+  PromptInputCommandItem,
+  PromptInputCommandList,
+} from '@/components/ai-elements/prompt-input'
 
 const props = defineProps({
   isSidebarCollapsed: {
@@ -168,37 +175,147 @@ const getMemberName = (senderId: string, _senderType: string) => {
   return friend?.name || 'AI'
 }
 
-const handleSubmit = (_e?: any) => {
-  if (!input.value.trim()) return
-  
-  if (!sessionStore.currentGroupId) return
-  const groupId = sessionStore.currentGroupId
-  
-  if (!sessionStore.messagesMap[groupId]) {
-    sessionStore.messagesMap[groupId] = []
-  }
-  
-  sessionStore.messagesMap[groupId].push({
-    id: Date.now(),
-    role: 'user',
-    content: input.value,
-    createdAt: Date.now()
-  })
-  
-  const currentInput = input.value
-  input.value = ''
+// Mention Logic
+const showMentionMenu = ref(false)
+const mentionSearch = ref('')
+const mentionTriggerIndex = ref(-1)
+const mentionedIds = ref<Set<string>>(new Set())
+const selectedIndex = ref(0)
+const mentionMenuRef = ref<HTMLElement | null>(null)
+let mentionKeydownHandler: ((e: KeyboardEvent) => void) | null = null
 
-  // Mock assistant response
-  setTimeout(() => {
-    if (sessionStore.currentGroupId === groupId) {
-      sessionStore.messagesMap[groupId].push({
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: `你刚才说：“${currentInput}”。我是群聊 AI，目前群聊互动功能还在开发中。`,
-        createdAt: Date.now()
-      })
+watch(showMentionMenu, (val) => {
+  if (!val) selectedIndex.value = 0
+  if (val) {
+    if (!mentionKeydownHandler) {
+      mentionKeydownHandler = (e: KeyboardEvent) => {
+        if (e.key !== 'Escape') return
+        e.preventDefault()
+        e.stopPropagation()
+        showMentionMenu.value = false
+        nextTick(() => {
+          focusTextarea()
+        })
+      }
+      window.addEventListener('keydown', mentionKeydownHandler)
     }
-  }, 1000)
+  } else if (mentionKeydownHandler) {
+    window.removeEventListener('keydown', mentionKeydownHandler)
+    mentionKeydownHandler = null
+  }
+})
+
+const filteredMembers = computed(() => {
+   if (!currentGroup.value?.members) return []
+   const filtered = currentGroup.value.members.filter(m => 
+     m.member_type === 'friend' && 
+     (m.name?.toLowerCase().includes(mentionSearch.value.toLowerCase()) || !mentionSearch.value)
+   )
+   return filtered
+ })
+
+watch(filteredMembers, () => {
+  selectedIndex.value = 0
+})
+
+onBeforeUnmount(() => {
+  if (mentionKeydownHandler) {
+    window.removeEventListener('keydown', mentionKeydownHandler)
+    mentionKeydownHandler = null
+  }
+})
+
+const lastCursorPosition = ref(0)
+
+const focusTextarea = (cursor?: number) => {
+  const textarea = document.querySelector('.input-textarea') as HTMLTextAreaElement | null
+  if (!textarea) return
+  textarea.focus()
+  if (typeof cursor === 'number') {
+    const safeCursor = Math.min(cursor, textarea.value.length)
+    textarea.setSelectionRange(safeCursor, safeCursor)
+  }
+}
+
+const handleInput = (e: any) => {
+  const val = e?.target?.value ?? ''
+  const cursor = e?.target?.selectionStart ?? 0
+  lastCursorPosition.value = cursor
+  const lastChar = val[cursor - 1]
+
+  if (lastChar === '@') {
+    showMentionMenu.value = true
+    mentionTriggerIndex.value = cursor
+    mentionSearch.value = ''
+  } else if (showMentionMenu.value) {
+    if (cursor < mentionTriggerIndex.value || (lastChar === ' ' && mentionTriggerIndex.value === cursor - 1)) {
+      showMentionMenu.value = false
+    } else {
+      mentionSearch.value = val.substring(mentionTriggerIndex.value, cursor)
+    }
+  }
+}
+
+const handleKeyDown = (e: KeyboardEvent) => {
+  if (!showMentionMenu.value) return
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    selectedIndex.value = (selectedIndex.value + 1) % filteredMembers.value.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    selectedIndex.value = (selectedIndex.value - 1 + filteredMembers.value.length) % filteredMembers.value.length
+  } else if (e.key === 'Enter') {
+    if (filteredMembers.value[selectedIndex.value]) {
+       e.preventDefault()
+       selectMention(filteredMembers.value[selectedIndex.value])
+    }
+  } else if (e.key === 'Escape') {
+    showMentionMenu.value = false
+    nextTick(() => {
+      const cursor = (e.target as HTMLTextAreaElement | null)?.selectionStart ?? lastCursorPosition.value
+      focusTextarea(cursor)
+    })
+  }
+}
+
+const selectMention = (member: any) => {
+  const before = input.value.substring(0, mentionTriggerIndex.value)
+  const after = input.value.substring(lastCursorPosition.value)
+  input.value = `${before}${member.name} ${after}`
+  mentionedIds.value.add(member.member_id)
+  showMentionMenu.value = false
+  
+  // Focus back to textarea
+  setTimeout(() => {
+    const textarea = document.querySelector('.input-textarea') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.focus()
+      const newCursor = mentionTriggerIndex.value + member.name.length + 1
+      textarea.setSelectionRange(newCursor, newCursor)
+    }
+  }, 0)
+}
+
+const handleSubmit = async (_e?: any) => {
+  if (!input.value.trim()) return
+  if (!sessionStore.currentGroupId) return
+  
+  const content = input.value
+  const mentions = Array.from(mentionedIds.value).filter(id => content.includes(`@${getMemberName(id, 'friend')}`))
+  
+  input.value = ''
+  mentionedIds.value.clear()
+  status.value = 'streaming'
+  
+  try {
+    await sessionStore.sendGroupMessage(content, mentions)
+  } catch (err) {
+    console.error('Failed to send group message:', err)
+    triggerToast('发送失败')
+  } finally {
+    status.value = 'ready'
+  }
 }
 
 // Avatar Preview
@@ -356,8 +473,37 @@ const handleAvatarClick = (url: string) => {
         </button>
       </div>
 
+      <!-- Mention Menu (Absolute positioned relative to input-box) -->
+      <div v-if="showMentionMenu" ref="mentionMenuRef" class="mention-menu-container">
+        <PromptInputCommand class="mention-menu">
+          <PromptInputCommandList>
+            <PromptInputCommandGroup heading="选择提醒的人">
+              <PromptInputCommandItem
+                v-for="(member, index) in filteredMembers"
+                :key="member.member_id"
+                :value="member.name || member.member_id"
+                @select="selectMention(member)"
+                class="mention-item"
+                :class="{ 'bg-accent text-accent-foreground': index === selectedIndex }"
+              >
+                <img :src="getMemberAvatar(member.member_id, 'friend')" class="w-6 h-6 rounded mr-2" />
+                <span>{{ member.name }}</span>
+              </PromptInputCommandItem>
+            </PromptInputCommandGroup>
+            <PromptInputCommandEmpty v-if="filteredMembers.length === 0">未找到成员</PromptInputCommandEmpty>
+          </PromptInputCommandList>
+        </PromptInputCommand>
+      </div>
+
       <PromptInput class="input-box" @submit="handleSubmit">
-        <PromptInputTextarea v-model="input" placeholder="输入消息..." class="input-textarea" />
+        <PromptInputTextarea 
+          v-model="input" 
+          placeholder="输入消息..." 
+          class="input-textarea" 
+          @input="handleInput"
+          @keydown="handleKeyDown"
+          @click="lastCursorPosition = $event.target.selectionStart"
+        />
         <div class="input-footer">
           <div class="footer-left">
             <!-- Thinking Mode Toggle -->
@@ -645,9 +791,11 @@ const handleAvatarClick = (url: string) => {
 
 /* Input Area */
 .chat-input-area {
+  position: relative; /* 重要：为提及菜单提供定位基准 */
   background: #f5f5f5;
   border-top: 1px solid #e5e5e5;
   padding: 8px 16px 16px;
+  overflow: visible !important; /* 确保菜单不会被切掉 */
 }
 
 .input-toolbar {
@@ -784,6 +932,47 @@ const handleAvatarClick = (url: string) => {
 
 :deep(.conversation) {
   height: 100%;
+}
+
+/* Mention Menu */
+/* Mention Menu */
+.mention-menu-container {
+  position: absolute;
+  bottom: 100%;
+  left: 16px;
+  width: 220px;
+  margin-bottom: 8px;
+  z-index: 1000;
+  display: block;
+}
+
+.mention-menu {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.mention-item {
+  display: flex !important;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mention-item:hover {
+  background: #f5f5f5;
+}
+
+@keyframes mention-pop {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+:deep(.mention-item[data-selected="true"]) {
+  background: #f0f0f0 !important;
 }
 
 /* Message Actions */

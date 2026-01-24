@@ -42,6 +42,17 @@ export interface GroupUpdate {
     auto_reply?: boolean;
 }
 
+export interface GroupMessageRead {
+    id: number;
+    group_id: number;
+    sender_id: string;
+    sender_type: 'user' | 'friend';
+    content: string;
+    message_type: 'text' | 'system' | '@';
+    mentions?: string[];
+    create_time: string;
+}
+
 async function request<T>(options: { url: string; method: string; data?: any; params?: any }): Promise<T> {
     const url = new URL(withApiBase(`/api${options.url}`));
     if (options.params) {
@@ -143,5 +154,70 @@ export const groupApi = {
             url: `/group/${groupId}/member/${memberId}`,
             method: 'DELETE',
         });
+    },
+
+    /**
+     * 获取群组历史消息
+     */
+    getGroupMessages: (groupId: number, skip: number = 0, limit: number = 100) => {
+        return request<GroupMessageRead[]>({
+            url: `/group/${groupId}/messages`,
+            method: 'GET',
+            params: { skip, limit },
+        });
+    },
+
+    /**
+     * 发送群消息并流式获取响应
+     */
+    async *sendGroupMessageStream(groupId: number, data: { content: string, mentions?: string[] }) {
+        const url = withApiBase(`/api/group/${groupId}/stream`);
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({}));
+            throw new Error(errorBody.detail || `Request failed with status ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) return;
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+
+                for (const part of parts) {
+                    if (part.trim() === '') continue;
+                    const eventMatch = part.match(/^event: (.*)$/m);
+                    const dataMatch = part.match(/^data: (.*)$/m);
+                    if (dataMatch) {
+                        try {
+                            yield {
+                                event: eventMatch ? eventMatch[1] : 'message',
+                                data: JSON.parse(dataMatch[1]),
+                            };
+                        } catch (e) {
+                            console.error('Failed to parse SSE data', e);
+                        }
+                    }
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
     },
 };
