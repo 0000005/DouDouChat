@@ -1,17 +1,20 @@
 import json
+import json
 import logging
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from agents import Agent, Runner, RunConfig, function_tool, set_default_openai_api, set_default_openai_client
+from agents import Agent, ModelSettings, Runner, RunConfig, function_tool, set_default_openai_api, set_default_openai_client
 from agents.items import ReasoningItem, ToolCallItem, ToolCallOutputItem
 from openai import AsyncOpenAI
+from openai.types.shared import Reasoning
 from sqlalchemy.orm import Session
 
 from app.services.memo.bridge import MemoService
 from app.services.llm_service import llm_service
 from app.services.settings_service import SettingsService
+from app.services import provider_rules
 from app.prompt import get_prompt
 
 
@@ -132,6 +135,9 @@ class RecallService:
         event_topk = SettingsService.get_setting(db, "memory", "event_topk", 5)
         threshold = SettingsService.get_setting(db, "memory", "similarity_threshold", 0.5)
 
+        messages_list = list(messages)
+        raw_model_name = llm_config.model_name
+
         # 2. 定义 Agent 手里的“召回工具”
         tool_description = get_prompt("recall/recall_tool_description.txt").strip()
 
@@ -169,16 +175,40 @@ class RecallService:
             current_time=current_time,
         ).strip()
 
-        model_name = llm_service.normalize_model_name(llm_config.model_name)
+        model_name = llm_service.normalize_model_name(raw_model_name)
+        use_litellm = provider_rules.should_use_litellm(llm_config, raw_model_name)
+        model_settings_kwargs: Dict[str, Any] = {}
+        if (
+            llm_config.capability_reasoning
+            and not use_litellm
+            and provider_rules.supports_reasoning_effort(llm_config)
+        ):
+            model_settings_kwargs["reasoning"] = Reasoning(
+                effort="low"
+            )
+        model_settings = ModelSettings(**model_settings_kwargs)
+        if use_litellm:
+            from agents.extensions.models.litellm_model import LitellmModel
+
+            gemini_model_name = provider_rules.normalize_gemini_model_name(raw_model_name)
+            gemini_base_url = provider_rules.normalize_gemini_base_url(llm_config.base_url)
+            agent_model = LitellmModel(
+                model=gemini_model_name,
+                base_url=gemini_base_url,
+                api_key=llm_config.api_key,
+            )
+        else:
+            agent_model = model_name
         agent = Agent(
             name="RecallAgent",
             instructions=instructions,
-            model=model_name,
+            model=agent_model,
             tools=[tool_recall],
+            model_settings=model_settings,
         )
 
         # 5. 准备对话上下文并运行 Agent
-        agent_messages = cls._normalize_messages(messages)
+        agent_messages = cls._normalize_messages(messages_list)
         if not agent_messages:
             return {"injected_messages": [], "footprints": []}
 
@@ -249,6 +279,8 @@ class RecallService:
             "name": "recall_memory",
             "arguments": last_tool_call_args,
         }
+        if provider_rules.needs_gemini_thought_signature(llm_config, model_name):
+            tool_call_item["provider_data"] = {"thought_signature": "skip_thought_signature_validator"}
         # 伪造该 Function Call 的返回结果（即我们合规后的记忆事件）
         tool_result_item = {
             "type": "function_call_output",
@@ -259,7 +291,18 @@ class RecallService:
         logger.info("RecallService merged %s events, generated %s footprints", len(merged_events), len(footprints))
 
         return {
-            "injected_messages": [tool_call_item, tool_result_item],
+            "injected_messages": [
+                *(
+                    [{
+                        "type": "reasoning",
+                        "summary": [{"text": "正在检索相关记忆。", "type": "summary_text"}],
+                    }]
+                    if provider_rules.needs_deepseek_reasoning_item(llm_config, model_name)
+                    else []
+                ),
+                tool_call_item,
+                tool_result_item
+            ],
             "footprints": footprints
         }
 
