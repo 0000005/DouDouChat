@@ -31,7 +31,8 @@ class GroupMessageBase(BaseModel):
     mentions: Optional[List[str]] = None
 
 class GroupMessageCreate(GroupMessageBase):
-    pass
+    enable_thinking: bool = False
+
 
 class GroupMessageRead(GroupMessageBase):
     id: int

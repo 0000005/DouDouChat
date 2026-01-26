@@ -3,17 +3,19 @@ import logging
 import asyncio
 from typing import List, Optional, AsyncGenerator
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.models.group import Group, GroupMember, GroupMessage
 from app.models.friend import Friend
 from app.schemas import group as group_schemas
 from app.services.llm_service import llm_service
 from app.services.settings_service import SettingsService
+from app.services.embedding_service import embedding_service
 from app.services import provider_rules
 from app.prompt import get_prompt
 from app.db.session import SessionLocal
-from app.services.memo.constants import DEFAULT_USER_ID
+from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
+
 
 from openai import AsyncOpenAI
 from openai.types.shared import Reasoning
@@ -102,15 +104,20 @@ class GroupChatService:
         db.commit()
         db.refresh(db_message)
 
-        # 发送起始事件
-        yield {"event": "start", "data": {"message_id": db_message.id, "group_id": group_id}}
+        llm_config = llm_service.get_active_config(db)
+        model_name = llm_config.model_name if llm_config else "unknown"
+
+        # 发送起始事件 (FE expects group_id and message_id)
+        yield {
+            "event": "start", 
+            "data": {
+                "message_id": db_message.id, 
+                "group_id": group_id,
+                "model": model_name
+            }
+        }
 
         # 2. 确定哪些 AI 需要回复
-        # 回复逻辑：
-        # a. 被 @ 的 AI 必须回复（无视 auto_reply）
-        # b. 如果没有被 @ 的 AI，且群组开启了 auto_reply，则由系统决定（目前简单实现：所有 AI 都有概率回复，或者仅第一个 AI 回复）
-        # c. 暂定：如果没有 @，且 auto_reply 开启，则默认群内第一个 AI 回复
-        
         group = db.query(Group).filter(Group.id == group_id).first()
         if not group:
             yield {"event": "error", "data": {"detail": "Group not found"}}
@@ -128,13 +135,12 @@ class GroupChatService:
                 except (ValueError, TypeError):
                     continue
         elif group.auto_reply:
-            # 找到群内所有好友，任选一个回复（或根据某种逻辑选择）
+            # 暂定：如果没有 @，且 auto_reply 开启，则默认群内第一个 AI 回复
             ai_members = db.query(GroupMember).filter(
                 GroupMember.group_id == group_id, 
                 GroupMember.member_type == "friend"
             ).all()
             if ai_members:
-                # 简单起见，取第一个
                 try:
                     f_id = int(ai_members[0].member_id)
                     friend = db.query(Friend).filter(Friend.id == f_id).first()
@@ -147,218 +153,477 @@ class GroupChatService:
             yield {"event": "done", "data": {"message": "No AI responded"}}
             return
 
-        # 并行运行所有 AI 的回复生成
+        # 3. 为每个参与回复的 AI 创建任务
         queue = asyncio.Queue()
+        
+        # 获取思考模式设置
+        enable_thinking = message_in.enable_thinking
+        if llm_config and enable_thinking and not llm_config.capability_reasoning:
+             # Check if it's gemini (which always has reasoning in some providers but maybe not marked)
+             force_thinking = provider_rules.is_gemini_model(llm_config, llm_config.model_name)
+             if not force_thinking:
+                 enable_thinking = False
 
-        async def producer(friend_obj):
-            async for event in GroupChatService._generate_ai_response(
-                group_id=group_id,
-                friend=friend_obj,
-                user_content=message_in.content,
-                history_limit=15
-            ):
-                await queue.put(event)
-
-        # 启动所有后台任务
-        task_list = [asyncio.create_task(producer(f)) for f in participants]
-
-        # 消费者：将队列中的事件 yield 出去
-        active_tasks = len(task_list)
-        while active_tasks > 0:
-            # 检查是否有任务完成
-            for i, task in enumerate(task_list):
-                if task and task.done():
-                    try:
-                        task.result() # 检查是否有异常
-                    except Exception as e:
-                        logger.error(f"Error in AI task: {e}")
-                    task_list[i] = None
-                    active_tasks -= 1
-
-            # 消费队列中的消息
-            while not queue.empty():
-                yield await queue.get()
-            
-            if active_tasks > 0:
-                await asyncio.sleep(0.05) # 稍微等待
-
-        # 最后再排空一次队列
-        while not queue.empty():
-            yield await queue.get()
-
-    @staticmethod
-    async def _generate_ai_response(
-        group_id: int,
-        friend: Friend,
-        user_content: str,
-        history_limit: int = 15
-    ) -> AsyncGenerator[dict, None]:
-        """
-        为单个 AI 生成群聊回复的生成器。
-        """
-        db = SessionLocal()
-        try:
-            # 获取上下文
-            history = db.query(GroupMessage).filter(
-                GroupMessage.group_id == group_id
-            ).order_by(GroupMessage.create_time.desc()).limit(history_limit).all()
-            history.reverse()
-
-            # 获取参与者名称
-            # 这里的参与者包括历史消息的发送者
-            member_ids = {msg.sender_id for msg in history}
-            # 这里的 member_ids 是字符串
-            friend_ids = []
-            for mid in member_ids:
-                try:
-                    friend_ids.append(int(mid))
-                except (ValueError, TypeError):
-                    continue
-            
-            friends_data = db.query(Friend).filter(Friend.id.in_(friend_ids)).all()
-            name_map = {str(f.id): f.name for f in friends_data}
-            name_map[DEFAULT_USER_ID] = "我" # 默认当前用户名为“我”
-            
-            # 1. Prepare LLM Config
-            llm_config = llm_service.get_active_config(db)
-            if not llm_config:
-                yield {"event": "error", "data": {"detail": f"LLM Config missing for {friend.name}"}}
-                return
-
-            raw_model_name = llm_config.model_name
-            model_name = provider_rules.normalize_llm_model_name(raw_model_name)
-            
-            # 2. 构建 Prompt
-            system_prompt = friend.system_prompt or get_prompt("chat/default_system_prompt.txt")
-            # 增加群聊上下文提示
-            system_prompt += f"\n\n你现在在群聊中，你的名字是 {friend.name}。请简洁回复，避免长篇大论。如果用户提到了其他人，请根据情况互动。"
-
-            agent_messages = []
-            for msg in history:
-                role = "user" if msg.sender_type == "user" else "assistant"
-                # 在群聊中，内容前方加上发送者名称以便 AI 区分
-                # 如果是 AI 自己发的消息，角色应为 assistant
-                if msg.sender_type == "friend" and msg.sender_id == str(friend.id):
-                    agent_messages.append({"role": "assistant", "content": msg.content})
-                else:
-                    sender_name = name_map.get(msg.sender_id, "未知")
-                    agent_messages.append({"role": "user", "content": f"{sender_name}: {msg.content}"})
-
-            # 3. Setup Agent
-            client = AsyncOpenAI(base_url=llm_config.base_url, api_key=llm_config.api_key)
-            set_default_openai_client(client, use_for_tracing=True)
-            set_default_openai_api("chat_completions")
-
-            temperature = friend.temperature if friend and friend.temperature is not None else 0.8
-            top_p = friend.top_p if friend and friend.top_p is not None else 0.9
-
-            use_litellm = provider_rules.should_use_litellm(llm_config, raw_model_name)
-            model_settings_kwargs = {}
-            if _supports_sampling(model_name):
-                model_settings_kwargs["temperature"] = temperature
-                model_settings_kwargs["top_p"] = top_p
-            
-            # 群聊通常不需要过于复杂的思考，但如果支持，可以开启
-            enable_thinking = True # 默认开启
-            if (
-                llm_config.capability_reasoning
-                and not use_litellm
-                and provider_rules.supports_reasoning_effort(llm_config)
-            ):
-                model_settings_kwargs["reasoning"] = Reasoning(
-                    effort="low" if enable_thinking else "none"
-                )
-            if use_litellm and enable_thinking:
-                model_settings_kwargs["reasoning"] = Reasoning(effort="low")
-            
-            model_settings = ModelSettings(**model_settings_kwargs)
-            
-            if use_litellm:
-                from agents.extensions.models.litellm_model import LitellmModel
-                gemini_model_name = provider_rules.normalize_gemini_model_name(raw_model_name)
-                gemini_base_url = provider_rules.normalize_gemini_base_url(llm_config.base_url)
-                agent_model = LitellmModel(
-                    model=gemini_model_name,
-                    base_url=gemini_base_url,
-                    api_key=llm_config.api_key,
-                )
-            else:
-                agent_model = model_name
-
-            agent = Agent(
-                name=friend.name,
-                instructions=system_prompt,
-                model=agent_model,
-                model_settings=model_settings,
-            )
-
-            # 4. Invoke LLM and save results
-            content_buffer = ""
-            assistant_msg_id = None
-            
-            # 先创建一个数据库消息占位
-            db_msg = GroupMessage(
+        active_tasks = []
+        for friend in participants:
+            # 为 AI 创建消息占位符
+            db_ai_msg = GroupMessage(
                 group_id=group_id,
                 sender_id=str(friend.id),
                 sender_type="friend",
                 content="",
                 message_type="text"
             )
-            db.add(db_msg)
+            db.add(db_ai_msg)
             db.commit()
-            db.refresh(db_msg)
-            assistant_msg_id = db_msg.id
+            db.refresh(db_ai_msg)
+            
+            task = asyncio.create_task(GroupChatService._run_group_ai_generation_task(
+                group_id=group_id,
+                friend_id=friend.id,
+                user_msg_id=db_message.id,
+                ai_msg_id=db_ai_msg.id,
+                message_content=message_in.content,
+                enable_thinking=enable_thinking,
+                queue=queue
+            ))
+            active_tasks.append(task)
 
-            result = Runner.run_streamed(
-                agent,
-                agent_messages,
-                run_config=RunConfig(trace_include_sensitive_data=True),
-            )
+        # 4. 消费队列中的事件
+        completed_count = 0
+        while completed_count < len(active_tasks):
+            event = await queue.get()
+            if event is None: # We use None as a completion signal for ONE task
+                completed_count += 1
+                continue
+            yield event
 
-            async for event in result.stream_events():
-                # 处理思考过程
-                if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
-                    if enable_thinking and isinstance(event.item, ReasoningItem):
-                        raw = event.item.raw_item
-                        text = _extract_reasoning_text(raw)
-                        if text:
-                            yield {
-                                "event": "thinking", 
-                                "data": {
-                                    "delta": text,
-                                    "sender_id": str(friend.id)
-                                }
-                            }
-                    continue
+    @staticmethod
+    async def _run_group_ai_generation_task(
+        group_id: int,
+        friend_id: int,
+        user_msg_id: int,
+        ai_msg_id: int,
+        message_content: str,
+        enable_thinking: bool,
+        queue: asyncio.Queue
+    ):
+        """
+        后台任务：处理单个 AI 在群聊中的生成。
+        """
+        try:
+            with SessionLocal() as db:
+                # 1. 获取上下文
+                friend = db.query(Friend).filter(Friend.id == friend_id).first()
+                if not friend:
+                    await queue.put(None)
+                    return
+
+                friend_name = friend.name
                 
-                # 处理文本内容
-                if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
-                    delta = event.data.delta
-                    if delta:
-                        content_buffer += delta
-                        yield {
-                            "event": "message", 
+                llm_config = llm_service.get_active_config(db)
+                if not llm_config:
+                    await queue.put({"event": "error", "data": {"sender_id": str(friend_id), "detail": "LLM Config missing"}})
+                    await queue.put(None)
+                    return
+
+                raw_model_name = llm_config.model_name
+                model_name = llm_service.normalize_model_name(raw_model_name)
+                
+                # 2. 准备历史记录与召回
+                # 获取最近 15 条消息
+                history_msgs = (
+                    db.query(GroupMessage)
+                    .filter(GroupMessage.group_id == group_id, GroupMessage.id < ai_msg_id)
+                    .order_by(GroupMessage.create_time.desc())
+                    .limit(15)
+                    .all()
+                )
+                history_msgs.reverse()
+                
+                # 姓名映射 (用于让 AI 区分谁在说话)
+                member_ids = {msg.sender_id for msg in history_msgs}
+                f_ids = []
+                for mid in member_ids:
+                    try: f_ids.append(int(mid))
+                    except (ValueError, TypeError): continue
+                
+                friends_data = db.query(Friend).filter(Friend.id.in_(f_ids)).all()
+                name_map = {str(f.id): f.name for f in friends_data}
+                name_map[DEFAULT_USER_ID] = "我"
+                
+                # 记忆召回
+                profile_data = ""
+                injected_recall_messages = []
+                enable_recall = SettingsService.get_setting(db, "memory", "recall_enabled", True)
+                
+                if enable_recall and embedding_service.get_active_setting(db):
+                    try:
+                        # 获取用户画像
+                        from app.services.memo.bridge import MemoService
+                        profiles = await MemoService.get_user_profiles(DEFAULT_USER_ID, DEFAULT_SPACE_ID)
+                        if profiles and profiles.profiles:
+                            profile_lines = [f"- {p.content.strip()}" for p in profiles.profiles if p and p.content]
+                            profile_data = "\n".join(profile_lines)
+                        
+                        # 执行召回
+                        from app.services.recall_service import RecallService
+                        messages_for_recall = []
+                        for m in history_msgs:
+                            role = "assistant" if (m.sender_type == "friend" and m.sender_id == str(friend_id)) else "user"
+                            messages_for_recall.append({"role": role, "content": m.content})
+                        
+                        recall_result = await RecallService.perform_recall(
+                            db, DEFAULT_USER_ID, DEFAULT_SPACE_ID, messages_for_recall, friend_id
+                        )
+                        injected_recall_messages = recall_result.get("injected_messages", [])
+                        
+                        # 推送召回的心路历程
+                        for fp in recall_result.get("footprints", []):
+                            if fp["type"] == "thinking" and enable_thinking:
+                                await queue.put({
+                                    "event": "recall_thinking", 
+                                    "data": {
+                                        "sender_id": str(friend_id), 
+                                        "delta": f"> {fp['content']}\n"
+                                    }
+                                })
+                            elif fp["type"] == "tool_call":
+                                await queue.put({
+                                    "event": "tool_call",
+                                    "data": {
+                                        "sender_id": str(friend_id),
+                                        "tool_name": fp["name"],
+                                        "arguments": fp["arguments"]
+                                    }
+                                })
+                            elif fp["type"] == "tool_result":
+                                await queue.put({
+                                    "event": "tool_result",
+                                    "data": {
+                                        "sender_id": str(friend_id),
+                                        "tool_name": fp["name"],
+                                        "result": fp["result"]
+                                    }
+                                })
+                    except Exception as e:
+                        logger.error(f"[GroupGenTask] Recall failed for {friend_name}: {e}")
+
+                # 3. 构建 Prompt
+                beijing_tz = timezone(timedelta(hours=8))
+                now_time = datetime.now(timezone.utc).astimezone(beijing_tz)
+                weekday_map = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+                current_time = f"{now_time:%Y-%m-%d 约%H}点 {weekday_map[now_time.weekday()]}"
+                
+                persona_prompt = (friend.system_prompt if friend.system_prompt else get_prompt("chat/default_system_prompt.txt")).strip()
+                
+                script_prompt = ""
+                if friend.script_expression:
+                    try: script_prompt = get_prompt("persona/script_expression.txt").strip()
+                    except Exception: pass
+                    
+                segment_prompt = ""
+                try:
+                    if friend.script_expression:
+                        segment_prompt = get_prompt("chat/message_segment_script.txt").strip()
+                    else:
+                        segment_prompt = get_prompt("chat/message_segment_normal.txt").strip()
+                except Exception: pass
+                
+                try:
+                    root_template = get_prompt("chat/root_system_prompt.txt")
+                    # 群聊特有的上下文提示
+                    group_context = f"\n\n你现在在群聊中，你的名字是 {friend.name}。请简洁回复，避免长篇大论。如果用户提到了其他人，请根据情况互动。"
+                    
+                    final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt + group_context)
+                    final_instructions = final_instructions.replace("{{script-expression}}", f"\n\n{script_prompt}" if script_prompt else "")
+                    final_instructions = final_instructions.replace("{{user-profile}}", f"\n\n【用户信息】\n{profile_data}" if profile_data else "")
+                    final_instructions = final_instructions.replace("{{segment-instruction}}", f"\n\n{segment_prompt}" if segment_prompt else "")
+                    final_instructions = final_instructions.replace("{{current-time}}", current_time)
+                except Exception:
+                    final_instructions = f"{persona_prompt}\n\n{script_prompt}\n\n{current_time}"
+
+                # 4. 构建消息列表
+                agent_messages = []
+                # 注入历史记录，转换格式
+                for msg in history_msgs:
+                    if msg.sender_type == "friend" and msg.sender_id == str(friend_id):
+                        agent_messages.append({"role": "assistant", "content": msg.content})
+                    else:
+                        sender_name = name_map.get(msg.sender_id, "未知")
+                        agent_messages.append({"role": "user", "content": f"{sender_name}: {msg.content}"})
+                
+                # 注入召回信息 (暂时简化处理，不放在 user 消息后，以免干扰群聊语境)
+                if injected_recall_messages:
+                    # 过滤掉 tool 相关的，群聊目前不一定支持复杂工具调用
+                    text_recalls = [m for m in injected_recall_messages if isinstance(m, dict) and "content" in m and m.get("role") in ("user", "assistant")]
+                    agent_messages.extend(text_recalls)
+                
+                # 5. 调用 LLM
+                client = AsyncOpenAI(base_url=llm_config.base_url, api_key=llm_config.api_key)
+                set_default_openai_client(client)
+                
+                temperature = friend.temperature if friend.temperature is not None else 0.8
+                top_p = friend.top_p if friend.top_p is not None else 0.9
+                
+                use_litellm = provider_rules.should_use_litellm(llm_config, raw_model_name)
+                model_settings_kwargs = {}
+                if _supports_sampling(model_name):
+                    model_settings_kwargs["temperature"] = temperature
+                    model_settings_kwargs["top_p"] = top_p
+                
+                if llm_config.capability_reasoning and provider_rules.supports_reasoning_effort(llm_config):
+                    model_settings_kwargs["reasoning"] = Reasoning(effort="low" if enable_thinking else "none")
+                
+                model_settings = ModelSettings(**model_settings_kwargs)
+                
+                if use_litellm:
+                    from agents.extensions.models.litellm_model import LitellmModel
+                    gemini_model_name = provider_rules.normalize_gemini_model_name(raw_model_name)
+                    gemini_base_url = provider_rules.normalize_gemini_base_url(llm_config.base_url)
+                    agent_model = LitellmModel(model=gemini_model_name, base_url=gemini_base_url, api_key=llm_config.api_key)
+                else:
+                    agent_model = model_name
+
+                agent = Agent(name=friend.name, instructions=final_instructions, model=agent_model, model_settings=model_settings)
+                
+                content_buffer = ""
+                has_reasoning_item = False
+                tool_call_names = {}
+                usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+                
+                result = Runner.run_streamed(agent, agent_messages, run_config=RunConfig(trace_include_sensitive_data=True))
+                
+                # 定义解析工具函数（如果当前作用域没有定义）
+                def _internal_extract_reasoning(raw: object) -> str:
+                    if raw is None: return ""
+                    if isinstance(raw, str): return raw
+                    # 简化地提取 text/content
+                    if isinstance(raw, dict):
+                        return str(raw.get("reasoning_content") or raw.get("reasoning") or raw.get("text") or raw.get("content") or "")
+                    else:
+                        return str(getattr(raw, "reasoning_content", None) or getattr(raw, "reasoning", None) or getattr(raw, "text", None) or getattr(raw, "content", None) or "")
+
+
+                buffer = ""
+                is_thinking_tag = False
+                think_fallback_buffer = ""
+                THINK_START = "<think>"
+                THINK_END = "</think>"
+                saved_content = ""
+
+                async for event in result.stream_events():
+                    # 处理思考过程 (DeepSeek reason_item)
+                    if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
+                        if enable_thinking and isinstance(event.item, ReasoningItem):
+                            has_reasoning_item = True
+                            raw = event.item.raw_item
+                            text = _internal_extract_reasoning(raw)
+                            if text:
+                                await queue.put({
+                                    "event": "model_thinking", 
+                                    "data": {
+                                        "sender_id": str(friend_id),
+                                        "delta": text,
+                                        "message_id": ai_msg_id
+                                    }
+                                })
+                        continue
+                    
+                    if isinstance(event, RunItemStreamEvent) and event.name == "tool_called":
+                        if isinstance(event.item, ToolCallItem):
+                            raw = event.item.raw_item
+                            if isinstance(raw, dict):
+                                name = raw.get("name")
+                                call_id = raw.get("call_id")
+                                arguments = raw.get("arguments")
+                            else:
+                                name = getattr(raw, "name", None)
+                                call_id = getattr(raw, "call_id", None)
+                                arguments = getattr(raw, "arguments", None)
+                            
+                            if call_id and name:
+                                tool_call_names[call_id] = name
+                                
+                            await queue.put({
+                                "event": "tool_call",
+                                "data": {
+                                    "sender_id": str(friend_id),
+                                    "tool_name": name or "tool",
+                                    "arguments": arguments,
+                                    "call_id": call_id,
+                                    "message_id": ai_msg_id
+                                },
+                            })
+                        continue
+
+                    if isinstance(event, RunItemStreamEvent) and event.name == "tool_output":
+                        if isinstance(event.item, ToolCallOutputItem):
+                            raw = event.item.raw_item
+                            if isinstance(raw, dict):
+                                call_id = raw.get("call_id")
+                            else:
+                                call_id = getattr(raw, "call_id", None)
+                            
+                            if call_id:
+                                name = tool_call_names.get(call_id, "tool")
+                            else:
+                                name = "tool"
+                                
+                            await queue.put({
+                                "event": "tool_result",
+                                "data": {
+                                    "sender_id": str(friend_id),
+                                    "tool_name": name,
+                                    "result": event.item.output,
+                                    "call_id": call_id,
+                                    "message_id": ai_msg_id
+                                },
+                            })
+                        continue
+                    
+                    # 处理文本内容
+                    if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+                        delta = event.data.delta
+                        if delta:
+                            content_buffer += delta
+                            # 处理 <think> 标签逻辑
+                            buffer += delta
+                            
+                            while buffer:
+                                if not is_thinking_tag:
+                                    start_idx = buffer.find(THINK_START)
+                                    if start_idx != -1:
+                                        # 发现开始标签前的内容为正文
+                                        if start_idx > 0:
+                                            msg_delta = buffer[:start_idx]
+                                            saved_content += msg_delta
+                                            await queue.put({
+                                                "event": "message",
+                                                "data": {
+                                                    "sender_id": str(friend_id),
+                                                    "delta": msg_delta,
+                                                    "message_id": ai_msg_id
+                                                }
+                                            })
+                                        buffer = buffer[start_idx + len(THINK_START):]
+                                        is_thinking_tag = True
+                                    else:
+                                        # 没有开始标签
+                                        if "<" not in buffer:
+                                            # 安全，全部输出
+                                            saved_content += buffer
+                                            await queue.put({
+                                                "event": "message",
+                                                "data": {
+                                                    "sender_id": str(friend_id),
+                                                    "delta": buffer,
+                                                    "message_id": ai_msg_id
+                                                }
+                                            })
+                                            buffer = ""
+                                        else:
+                                            # 可能有标签，等待更多字符
+                                            break
+                                else:
+                                    # 在思考标签内
+                                    end_idx = buffer.find(THINK_END)
+                                    if end_idx != -1:
+                                        # 发现结束标签
+                                        if end_idx > 0 and enable_thinking and not has_reasoning_item:
+                                            think_chunk = buffer[:end_idx]
+                                            think_fallback_buffer += think_chunk
+                                            await queue.put({
+                                                "event": "model_thinking",
+                                                "data": {
+                                                    "sender_id": str(friend_id),
+                                                    "delta": think_chunk,
+                                                    "message_id": ai_msg_id
+                                                }
+                                            })
+                                        
+                                        buffer = buffer[end_idx + len(THINK_END):]
+                                        is_thinking_tag = False
+                                    else:
+                                        # 没发现结束标签
+                                        if "</" not in buffer:
+                                            if enable_thinking and not has_reasoning_item:
+                                                think_fallback_buffer += buffer
+                                                await queue.put({
+                                                    "event": "model_thinking",
+                                                    "data": {
+                                                        "sender_id": str(friend_id),
+                                                        "delta": buffer,
+                                                        "message_id": ai_msg_id
+                                                    }
+                                                })
+                                            buffer = ""
+                                        else:
+                                            break
+
+                
+                # 处理剩余 buffer
+                if buffer:
+                    if is_thinking_tag:
+                        if enable_thinking and not has_reasoning_item:
+                            think_fallback_buffer += buffer
+                            await queue.put({
+                                "event": "model_thinking",
+                                "data": {
+                                    "sender_id": str(friend_id),
+                                    "delta": buffer,
+                                    "message_id": ai_msg_id
+                                }
+                            })
+                    else:
+                        saved_content += buffer
+                        await queue.put({
+                            "event": "message",
                             "data": {
-                                "delta": delta, 
-                                "sender_id": str(friend.id),
-                                "message_id": assistant_msg_id
+                                "sender_id": str(friend_id),
+                                "delta": buffer,
+                                "message_id": ai_msg_id
                             }
-                        }
+                        })
 
-            # 更新数据库
-            db_msg.content = content_buffer
-            db.commit()
+                
+                # 最后如果只使用了 content_buffer 但经过过滤后 saved_content 为空且也没提取到思考内容
+                # 说明可能全被当做 content 了，或者 content_buffer 就是最终纯文本
+                # 在此为了保险，持久化时使用 content_buffer (包含所有原文)，或者 saved_content (仅正文)
+                # 通常我们希望存纯净的正文到 content 字段，思考过程可以放另一字段或者直接不存(目前模型没此字段)
+                # 这里为了保持一致，我们优先使用 filter 后的正文作为 content
+                
+                final_content = saved_content if saved_content else content_buffer
+                # 去除可能残余的标签
+                final_content = final_content.replace(THINK_START, "").replace(THINK_END, "")
 
-            yield {
-                "event": "done", 
-                "data": {
-                    "sender_id": str(friend.id),
-                    "message_id": assistant_msg_id,
-                    "content": content_buffer
-                }
-            }
 
+                # 6. 持久化
+                db_msg = db.query(GroupMessage).filter(GroupMessage.id == ai_msg_id).first()
+                if db_msg:
+                    db_msg.content = final_content
+                    db.commit()
+
+                usage["completion_tokens"] = len(content_buffer)
+                # 发送完成事件
+                await queue.put({
+                    "event": "done", 
+                    "data": {
+                        "sender_id": str(friend_id),
+                        "message_id": ai_msg_id,
+                        "content": final_content,
+                        "usage": usage
+                    }
+                })
+
+
+
+        except Exception as e:
+            logger.error(f"[GroupGenTask] Error for {friend_id}: {e}")
+            await queue.put({"event": "error", "data": {"sender_id": str(friend_id), "detail": str(e)}})
         finally:
-            db.close()
+            await queue.put(None) # Signal completion of this producer
+
 
 group_chat_service = GroupChatService()
+

@@ -170,8 +170,8 @@ export const groupApi = {
     /**
      * 发送群消息并流式获取响应
      */
-    async *sendGroupMessageStream(groupId: number, data: { content: string, mentions?: string[] }) {
-        const url = withApiBase(`/api/group/${groupId}/stream`);
+    async *sendGroupMessageStream(groupId: number, data: { content: string, mentions?: string[], enable_thinking?: boolean }): AsyncGenerator<{ event: string, data: any }> {
+        const url = withApiBase(`/api/chat/group/${groupId}/messages`);
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -201,17 +201,27 @@ export const groupApi = {
                 buffer = parts.pop() || '';
 
                 for (const part of parts) {
-                    if (part.trim() === '') continue;
-                    const eventMatch = part.match(/^event: (.*)$/m);
-                    const dataMatch = part.match(/^data: (.*)$/m);
-                    if (dataMatch) {
+                    const lines = part.split('\n');
+                    let eventType = 'message';
+                    let dataString = '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            dataString += (dataString ? '\n' : '') + line.slice(6);
+                        }
+                    }
+
+                    if (dataString) {
                         try {
                             yield {
-                                event: eventMatch ? eventMatch[1] : 'message',
-                                data: JSON.parse(dataMatch[1]),
+                                event: eventType,
+                                data: JSON.parse(dataString),
                             };
                         } catch (e) {
                             console.error('Failed to parse SSE data', e);
+                            yield { event: eventType, data: dataString };
                         }
                     }
                 }

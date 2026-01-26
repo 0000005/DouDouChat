@@ -1,24 +1,40 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { useSessionStore, parseMessageSegments } from '@/stores/session'
 import { useFriendStore } from '@/stores/friend'
 import { useGroupStore } from '@/stores/group'
 import { useSettingsStore } from '@/stores/settings'
-import { Menu, MoreHorizontal, Brain, MessageSquarePlus } from 'lucide-vue-next'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { AlertTriangle, Menu, MoreHorizontal, Brain, MessageSquarePlus } from 'lucide-vue-next'
 import { useThinkingModeStore } from '@/stores/thinkingMode'
+import { useLlmStore } from '@/stores/llm'
+import { useEmbeddingStore } from '@/stores/embedding'
+
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton
 } from '@/components/ai-elements/conversation'
 import { MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { StreamMarkdown } from 'streamdown-vue'
+import ToolCallsDetail from '@/components/common/ToolCallsDetail.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import { getStaticUrl } from '@/api/base'
+
 import {
   PromptInput,
   PromptInputTextarea,
   PromptInputSubmit
 } from '@/components/ai-elements/prompt-input'
-import { getStaticUrl } from '@/api/base'
+
 import GroupAvatar from './common/GroupAvatar.vue'
 import {
   DropdownMenu,
@@ -26,10 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog'
+
 import {
   PromptInputCommand,
   PromptInputCommandEmpty,
@@ -37,6 +50,7 @@ import {
   PromptInputCommandItem,
   PromptInputCommandList,
 } from '@/components/ai-elements/prompt-input'
+
 
 const props = defineProps({
   isSidebarCollapsed: {
@@ -52,8 +66,48 @@ const friendStore = useFriendStore()
 const groupStore = useGroupStore()
 const settingsStore = useSettingsStore()
 const thinkingModeStore = useThinkingModeStore()
+const llmStore = useLlmStore()
+const embeddingStore = useEmbeddingStore()
+
+onMounted(async () => {
+  await Promise.all([
+    llmStore.fetchConfigs(),
+    embeddingStore.fetchConfigs(),
+    settingsStore.fetchChatSettings(),
+    settingsStore.fetchMemorySettings()
+  ])
+})
+
+const showNoLlmDialog = ref(false)
+
+const activeLlmConfig = computed(() => llmStore.getConfigById(settingsStore.activeLlmConfigId))
+const isLlmConfigured = computed(() => {
+  if (!activeLlmConfig.value) return false
+  return !!activeLlmConfig.value.api_key
+})
+
+const checkLlmConfigAndSubmit = (e?: any) => {
+  if (!isLlmConfigured.value) {
+    showNoLlmDialog.value = true
+    return
+  }
+  handleSubmit(e)
+}
+
+const handleGoToSettings = () => {
+  showNoLlmDialog.value = false
+  emit('open-settings')
+}
+
+const handleOpenEmbeddingSettings = () => {
+  emit('open-settings', 'embedding')
+}
+
+const activeEmbeddingConfig = computed(() => embeddingStore.getConfigById(settingsStore.activeEmbeddingConfigId))
+const isEmbeddingConfigured = computed(() => !!activeEmbeddingConfig.value)
 
 const input = ref('')
+
 const status = ref<'ready' | 'streaming'>('ready')
 
 const isThinkingMode = computed(() => thinkingModeStore.isEnabled)
@@ -181,8 +235,8 @@ const mentionSearch = ref('')
 const mentionTriggerIndex = ref(-1)
 const mentionedIds = ref<Set<string>>(new Set())
 const selectedIndex = ref(0)
-const mentionMenuRef = ref<HTMLElement | null>(null)
 let mentionKeydownHandler: ((e: KeyboardEvent) => void) | null = null
+
 
 watch(showMentionMenu, (val) => {
   if (!val) selectedIndex.value = 0
@@ -309,7 +363,7 @@ const handleSubmit = async (_e?: any) => {
   status.value = 'streaming'
   
   try {
-    await sessionStore.sendGroupMessage(content, mentions)
+    await sessionStore.sendGroupMessage(content, mentions, isThinkingMode.value)
   } catch (err) {
     console.error('Failed to send group message:', err)
     triggerToast('发送失败')
@@ -317,6 +371,53 @@ const handleSubmit = async (_e?: any) => {
     status.value = 'ready'
   }
 }
+
+// Thinking & Tool Calls Dialogs
+const thinkingDialogOpen = ref(false)
+const toolCallsDialogOpen = ref(false)
+const activeModelThinkingContent = ref('')
+const activeRecallThinkingContent = ref('')
+const activeToolCalls = ref<any[]>([])
+
+const getModelThinkingContent = (msg: any): string => {
+  const content = msg?.thinkingContent ?? msg?.reasoning ?? msg?.thinking
+  if (typeof content !== 'string') return ''
+  return content.trim()
+}
+
+const getRecallThinkingContent = (msg: any): string => {
+  const content = msg?.recallThinkingContent ?? msg?.recall_thinking
+  if (typeof content !== 'string') return ''
+  return content.trim()
+}
+
+const getToolCalls = (msg: any): any[] => {
+  const toolCalls = msg?.toolCalls ?? msg?.tool_calls
+  return Array.isArray(toolCalls) ? toolCalls : []
+}
+
+const hasThinking = (msg: any) => {
+  return getModelThinkingContent(msg).length > 0 || getRecallThinkingContent(msg).length > 0
+}
+
+const hasToolCalls = (msg: any) => getToolCalls(msg).length > 0
+
+const handleOpenThinking = (msg: any) => {
+  const modelContent = getModelThinkingContent(msg)
+  const recallContent = getRecallThinkingContent(msg)
+  if (!modelContent && !recallContent) return
+  activeModelThinkingContent.value = modelContent
+  activeRecallThinkingContent.value = recallContent
+  thinkingDialogOpen.value = true
+}
+
+const handleOpenToolCalls = (msg: any) => {
+  const toolCalls = getToolCalls(msg)
+  if (!toolCalls || !toolCalls.length) return
+  activeToolCalls.value = toolCalls
+  toolCallsDialogOpen.value = true
+}
+
 
 // Avatar Preview
 const showAvatarPreview = ref(false)
@@ -360,7 +461,17 @@ const handleAvatarClick = (url: string) => {
 
     <!-- Messages Area -->
     <div class="chat-messages-container flex-col bg-[#f5f5f5]">
+      <!-- Vectorization Warning Banner -->
+      <div v-if="!isEmbeddingConfigured" class="vector-warning-banner" @click="handleOpenEmbeddingSettings">
+        <div class="banner-content text-amber-600 bg-amber-50 px-4 py-2 border-b border-amber-100 flex items-center gap-2 text-sm cursor-pointer hover:bg-amber-100 transition-colors">
+          <AlertTriangle :size="16" class="warning-icon" />
+          <span>向量化模型未配置，记忆系统将无法工作。</span>
+          <span class="action-link text-amber-700 font-medium ml-auto">去配置 &gt;</span>
+        </div>
+      </div>
+
       <!-- Empty State with WeChat Logo -->
+
       <div v-if="messages.length === 0" class="empty-state flex-1">
         <div class="wechat-logo">
           <svg viewBox="0 0 100 100" class="logo-svg">
@@ -417,7 +528,14 @@ const handleAvatarClick = (url: string) => {
                         <DropdownMenuItem @click="handleCopyContent(segment)">
                           <span>复制</span>
                         </DropdownMenuItem>
+                        <DropdownMenuItem v-if="hasThinking(msg)" @click="handleOpenThinking(msg)">
+                          <span>查看思考过程</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem v-if="hasToolCalls(msg)" @click="handleOpenToolCalls(msg)">
+                          <span>查看工具调用</span>
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
+
                     </DropdownMenu>
                   </div>
                 </div>
@@ -495,7 +613,8 @@ const handleAvatarClick = (url: string) => {
         </PromptInputCommand>
       </div>
 
-      <PromptInput class="input-box" @submit="handleSubmit">
+      <PromptInput class="input-box" @submit="checkLlmConfigAndSubmit">
+
         <PromptInputTextarea 
           v-model="input" 
           placeholder="输入消息..." 
@@ -530,8 +649,78 @@ const handleAvatarClick = (url: string) => {
         <img :src="previewAvatarUrl" class="max-w-full max-h-[80vh] object-contain rounded-md" alt="Avatar Preview" />
       </DialogContent>
     </Dialog>
+
+    <!-- Thinking Dialog -->
+    <Dialog v-model:open="thinkingDialogOpen">
+      <DialogContent class="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>思考过程</DialogTitle>
+        </DialogHeader>
+        <div class="thinking-dialog-body max-h-[60vh] overflow-y-auto pr-2">
+          <div v-if="activeRecallThinkingContent" class="thinking-section mb-6">
+            <div class="thinking-section-title text-sm font-semibold text-gray-500 mb-2 border-l-4 border-amber-400 pl-2">回忆思维链</div>
+            <StreamMarkdown
+              :content="activeRecallThinkingContent"
+              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }"
+              class="thinking-markdown text-sm text-gray-700 bg-gray-50 p-3 rounded"
+            />
+          </div>
+          <div v-if="activeModelThinkingContent" class="thinking-section">
+            <div class="thinking-section-title text-sm font-semibold text-gray-500 mb-2 border-l-4 border-emerald-400 pl-2">模型思维链</div>
+            <StreamMarkdown
+              :content="activeModelThinkingContent"
+              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }"
+              class="thinking-markdown text-sm text-gray-700 bg-gray-50 p-3 rounded"
+            />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Tool Calls Dialog -->
+    <Dialog v-model:open="toolCallsDialogOpen">
+      <DialogContent class="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>工具调用</DialogTitle>
+        </DialogHeader>
+        <div class="tool-calls-dialog-body">
+          <ToolCallsDetail :tool-calls="activeToolCalls" />
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- LLM Not Configured Dialog -->
+    <Dialog v-model:open="showNoLlmDialog">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 bg-amber-100 rounded-full">
+              <AlertTriangle class="h-6 w-6 text-amber-600" />
+            </div>
+            <DialogTitle>未配置 AI 模型</DialogTitle>
+          </div>
+          <DialogDescription class="text-base">
+            发送消息需要先配置大语言模型（LLM）。目前检测到您尚未设置 API Key 或接口地址。
+          </DialogDescription>
+        </DialogHeader>
+        <div class="py-4 text-sm text-gray-500 bg-gray-50 p-4 rounded-md border border-gray-100">
+          请前往“设置 -> LLM 设置”中完成配置，配置完成后即可开始对话。
+        </div>
+        <DialogFooter class="sm:justify-end gap-2">
+          <Button variant="ghost" @click="showNoLlmDialog = false">
+            稍后再说
+          </Button>
+          <Button type="button" variant="default" @click="handleGoToSettings"
+            class="bg-emerald-600 hover:bg-emerald-700">
+            去配置
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
   </div>
 </template>
+
 
 <style scoped>
 .wechat-chat-area {

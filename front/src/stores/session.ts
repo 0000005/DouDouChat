@@ -499,7 +499,7 @@ export const useSessionStore = defineStore('session', () => {
     }
 
     // Send message to current group
-    const sendGroupMessage = async (content: string, mentions: string[] = []) => {
+    const sendGroupMessage = async (content: string, mentions: string[] = [], enableThinking: boolean = false) => {
         if (!currentGroupId.value) return
 
         const groupId = currentGroupId.value
@@ -523,7 +523,7 @@ export const useSessionStore = defineStore('session', () => {
         const aiMessages: Record<string, Message> = {}
 
         try {
-            const stream = groupApi.sendGroupMessageStream(groupId, { content, mentions })
+            const stream = groupApi.sendGroupMessageStream(groupId, { content, mentions, enable_thinking: enableThinking })
             streamingMap.value[groupId] = true
 
             for await (const { event, data } of stream) {
@@ -533,7 +533,7 @@ export const useSessionStore = defineStore('session', () => {
                         const localMsg = messagesMap.value[groupId].find(m => m.id === userMsg.id)
                         if (localMsg) localMsg.id = data.message_id
                     }
-                } else if (event === 'message' || event === 'thinking') {
+                } else if (event === 'message' || event === 'model_thinking' || event === 'thinking' || event === 'recall_thinking' || event === 'tool_call' || event === 'tool_result') {
                     const senderId = data.sender_id
                     if (!senderId) continue
 
@@ -544,6 +544,8 @@ export const useSessionStore = defineStore('session', () => {
                             role: 'assistant',
                             content: '',
                             thinkingContent: '',
+                            recallThinkingContent: '',
+                            toolCalls: [],
                             createdAt: Date.now(),
                             senderId: senderId
                         }
@@ -552,8 +554,26 @@ export const useSessionStore = defineStore('session', () => {
 
                     if (event === 'message') {
                         aiMessages[senderId].content += data.delta || ''
-                    } else if (event === 'thinking') {
+                    } else if (event === 'model_thinking' || event === 'thinking') {
                         aiMessages[senderId].thinkingContent = (aiMessages[senderId].thinkingContent || '') + (data.delta || '')
+                    } else if (event === 'recall_thinking') {
+                        aiMessages[senderId].recallThinkingContent = (aiMessages[senderId].recallThinkingContent || '') + (data.delta || '')
+                    } else if (event === 'tool_call') {
+                        if (!aiMessages[senderId].toolCalls) aiMessages[senderId].toolCalls = []
+                        aiMessages[senderId].toolCalls?.push({
+                            name: data.tool_name,
+                            args: data.arguments,
+                            callId: data.call_id,
+                            status: 'calling'
+                        })
+                    } else if (event === 'tool_result') {
+                        const tc = data.call_id
+                            ? [...(aiMessages[senderId].toolCalls || [])].reverse().find(t => t.callId === data.call_id && t.status === 'calling')
+                            : [...(aiMessages[senderId].toolCalls || [])].reverse().find(t => t.name === data.tool_name && t.status === 'calling')
+                        if (tc) {
+                            tc.result = data.result
+                            tc.status = 'completed'
+                        }
                     }
                 } else if (event === 'done') {
                     const senderId = data.sender_id

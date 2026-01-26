@@ -134,35 +134,4 @@ def read_group_messages(
     messages = db.query(GroupMessage).filter(GroupMessage.group_id == id).order_by(GroupMessage.create_time.desc()).offset(skip).limit(limit).all()
     return list(reversed(messages))
 
-@router.post("/group/{id}/stream")
-async def send_group_message_stream(
-    *,
-    db: Session = Depends(deps.get_db),
-    id: int,
-    message_in: group_schemas.GroupMessageCreate,
-):
-    """
-    发送群消息并流式获取 AI 响应。
-    """
-    from app.models.group import GroupMember
-    from fastapi.responses import StreamingResponse
-    from app.services.group_chat_service import group_chat_service
-    import json
 
-    # 鉴权：检查当前用户是否在群组中
-    member = db.query(GroupMember).filter(
-        GroupMember.group_id == id,
-        GroupMember.member_id == DEFAULT_USER_ID,
-        GroupMember.member_type == "user"
-    ).first()
-    if not member:
-        raise HTTPException(status_code=403, detail="Not a member of this group")
-
-    async def event_generator():
-        async for event_data in group_chat_service.send_group_message_stream(db, id, message_in):
-            event_type = event_data.get("event", "message")
-            data_payload = event_data.get("data", {})
-            json_data = json.dumps(data_payload, ensure_ascii=False)
-            yield f"event: {event_type}\ndata: {json_data}\n\n"
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
