@@ -258,7 +258,7 @@ onMounted(async () => {
             <span class="friend-time">{{ getLastActiveTime(item) }}</span>
           </div>
           <div class="friend-preview">
-            <template v-if="item.type === 'friend' && sessionStore.streamingMap[item.id]">
+            <template v-if="sessionStore.streamingMap[item.id]">
               <span class="text-emerald-600 font-medium">对方正在输入...</span>
             </template>
             <template v-else>

@@ -109,8 +109,11 @@ export const useSessionStore = defineStore('session', () => {
         return messagesMap.value[currentFriendId.value] || []
     })
 
-    // Is current friend's chat streaming?
+    // Is current friend or group chat streaming?
     const isStreaming = computed(() => {
+        if (chatType.value === 'group') {
+            return !!currentGroupId.value && !!streamingMap.value[currentGroupId.value]
+        }
         if (!currentFriendId.value) return false
         return !!streamingMap.value[currentFriendId.value]
     })
@@ -539,7 +542,7 @@ export const useSessionStore = defineStore('session', () => {
 
                     // If we haven't seen this AI friend yet in this interaction, create a placeholder
                     if (!aiMessages[senderId]) {
-                        aiMessages[senderId] = {
+                        const newMsg: Message = {
                             id: -(Date.now() + Math.random()),
                             role: 'assistant',
                             content: '',
@@ -549,7 +552,9 @@ export const useSessionStore = defineStore('session', () => {
                             createdAt: Date.now(),
                             senderId: senderId
                         }
-                        messagesMap.value[groupId].push(aiMessages[senderId])
+                        messagesMap.value[groupId].push(newMsg)
+                        // Important: Get the reactive proxy from the messages list to ensure property updates are tracked
+                        aiMessages[senderId] = messagesMap.value[groupId][messagesMap.value[groupId].length - 1]
                     }
 
                     if (event === 'message') {
@@ -579,9 +584,13 @@ export const useSessionStore = defineStore('session', () => {
                     const senderId = data.sender_id
                     if (senderId && aiMessages[senderId]) {
                         aiMessages[senderId].id = data.message_id
-                        aiMessages[senderId].content = data.content
+                        // Use finalized content if provided
+                        if (data.content) {
+                            aiMessages[senderId].content = data.content
+                        }
                     }
-                } else if (event === 'error') {
+                }
+                else if (event === 'error') {
                     console.error('Group stream error:', data)
                 }
             }
