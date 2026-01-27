@@ -454,7 +454,7 @@ const handleAvatarClick = (url: string) => {
               <GroupAvatar :size="32" :members="currentGroup?.members" :avatar="currentGroup?.avatar" />
               <h2 class="chat-title">{{ currentGroupName }}</h2>
               <span class="member-count text-gray-400 text-sm font-normal">({{ currentGroup?.member_count || 0
-                }})</span>
+              }})</span>
             </div>
           </div>
         </div>
@@ -604,6 +604,9 @@ const handleAvatarClick = (url: string) => {
         <span class="typing-text">
           {{sessionStore.groupTypingUsers.map(u => u.name).join('、')}} 正在输入中...
         </span>
+      </div>
+      <div v-else-if="sessionStore.isStreaming" class="group-typing-area">
+        <span class="typing-text">正在思考谁来回复...</span>
       </div>
     </div>
 

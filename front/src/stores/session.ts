@@ -329,6 +329,11 @@ export const useSessionStore = defineStore('session', () => {
         chatType.value = 'group'
         currentSessionId.value = null
 
+        // Clear unread count when entering group chat
+        if (unreadCounts.value['g' + groupId]) {
+            unreadCounts.value['g' + groupId] = 0
+        }
+
         // Fetch group messages
         isLoading.value = true
         try {
@@ -654,6 +659,18 @@ export const useSessionStore = defineStore('session', () => {
                         if (data.content) {
                             aiMessages[senderId].content = data.content
                         }
+                    }
+
+                    // If user has switched away during streaming, mark as unread
+                    if (currentGroupId.value !== groupId) {
+                        const finalContent = data.content || (senderId ? aiMessages[senderId]?.content : '') || ''
+                        const segmentCount = parseMessageSegments(finalContent).length || 1
+                        unreadCounts.value['g' + groupId] = (unreadCounts.value['g' + groupId] || 0) + segmentCount
+                    }
+
+                    // Trigger tray/taskbar flash if window doesn't have focus (Electron only)
+                    if (typeof document !== 'undefined' && !document.hasFocus()) {
+                        window.WeAgentChat?.notification?.flash()
                     }
                     // Story 09-10: Remove from typing list on done
                     removeGroupTypingUser(groupId, senderId)
