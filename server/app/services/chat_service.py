@@ -1087,7 +1087,6 @@ async def send_message_stream(db: Session, session_id: int, message_in: chat_sch
         }
     }
 
-
     while True:
         event = await queue.get()
         if event is None: # Sentinel
@@ -1172,7 +1171,6 @@ async def regenerate_message_stream(db: Session, session_id: int, ai_message_id:
     if enable_thinking and not llm_config.capability_reasoning and not force_thinking:
         enable_thinking = False
 
-    
     asyncio.create_task(_run_chat_generation_task(
         session_id=session_id,
         friend_id=db_session.friend_id,
@@ -1201,7 +1199,6 @@ async def regenerate_message_stream(db: Session, session_id: int, ai_message_id:
         if event is None:
             break
         yield event
-
 
 
 def check_and_archive_expired_sessions(db: Session) -> int:

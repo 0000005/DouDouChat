@@ -443,7 +443,6 @@ const handleAvatarClick = (url: string) => {
 
 <template>
   <div class="wechat-chat-area group-chat">
-    <!-- Header -->
     <header class="chat-header" :class="{ 'electron-mode': isElectron }" @contextmenu="handleHeaderContextMenu">
       <button v-if="isSidebarCollapsed" @click="emit('toggle-sidebar')" class="mobile-menu-btn">
         <Menu :size="20" />
@@ -455,9 +454,8 @@ const handleAvatarClick = (url: string) => {
               <GroupAvatar :size="32" :members="currentGroup?.members" :avatar="currentGroup?.avatar" />
               <h2 class="chat-title">{{ currentGroupName }}</h2>
               <span class="member-count text-gray-400 text-sm font-normal">({{ currentGroup?.member_count || 0
-              }})</span>
+                }})</span>
             </div>
-            <span v-if="sessionStore.isStreaming" class="typing-indicator">对方正在输入...</span>
           </div>
         </div>
         <h2 v-else class="chat-title">{{ currentGroupName }}</h2>
@@ -482,6 +480,7 @@ const handleAvatarClick = (url: string) => {
           <span class="action-link text-amber-700 font-medium ml-auto">去配置 &gt;</span>
         </div>
       </div>
+
 
       <!-- Empty State with WeChat Logo -->
 
@@ -599,7 +598,15 @@ const handleAvatarClick = (url: string) => {
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
+
+      <!-- Story 09-10: Group specific typing indicator -->
+      <div v-if="sessionStore.isStreaming && sessionStore.groupTypingUsers.length > 0" class="group-typing-area">
+        <span class="typing-text">
+          {{sessionStore.groupTypingUsers.map(u => u.name).join('、')}} 正在输入中...
+        </span>
+      </div>
     </div>
+
 
     <!-- Input Area -->
     <div class="chat-input-area">
@@ -819,6 +826,27 @@ const handleAvatarClick = (url: string) => {
   animation: typing-fade 1.5s infinite ease-in-out;
   text-align: left;
 }
+
+/* Story 09-10: Input area typing indicator */
+.group-typing-area {
+  padding: 4px 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background: #f5f5f5;
+  min-height: 24px;
+}
+
+.typing-text {
+  font-size: 12px;
+  color: #888;
+  animation: typing-fade 1.5s infinite ease-in-out;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 
 @keyframes typing-fade {
 

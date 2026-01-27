@@ -689,6 +689,7 @@ const handleAvatarClick = (url: string) => {
       </Conversation>
     </div>
 
+
     <!-- Input Area -->
     <div class="chat-input-area">
       <div class="input-toolbar">
@@ -736,19 +737,13 @@ const handleAvatarClick = (url: string) => {
         <div class="thinking-dialog-body">
           <div v-if="activeRecallThinkingContent" class="thinking-section">
             <div class="thinking-section-title">回忆思维链</div>
-            <StreamMarkdown
-              :content="activeRecallThinkingContent"
-              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }"
-              class="thinking-markdown"
-            />
+            <StreamMarkdown :content="activeRecallThinkingContent"
+              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }" class="thinking-markdown" />
           </div>
           <div v-if="activeModelThinkingContent" class="thinking-section">
             <div class="thinking-section-title">模型思维链</div>
-            <StreamMarkdown
-              :content="activeModelThinkingContent"
-              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }"
-              class="thinking-markdown"
-            />
+            <StreamMarkdown :content="activeModelThinkingContent"
+              :shiki-theme="{ light: 'github-light', dark: 'github-dark' }" class="thinking-markdown" />
           </div>
         </div>
       </DialogContent>
@@ -772,7 +767,6 @@ const handleAvatarClick = (url: string) => {
       </DialogContent>
     </Dialog>
 
-    <!-- LLM Not Configured Dialog -->
     <Dialog v-model:open="showNoLlmDialog">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
@@ -800,21 +794,22 @@ const handleAvatarClick = (url: string) => {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    <!-- Confirmation Dialog for Recall -->
+
+    <!-- Recall Confirmation Dialog -->
     <Dialog v-model:open="recallDialogOpen">
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>撤回消息</DialogTitle>
+          <DialogTitle>确认撤回消息？</DialogTitle>
           <DialogDescription>
-            确定要撤回这条消息吗？撤回后，AI 的相关回复也会被一并删除。
+            撤回后消息将无法恢复，且后端会自动重置对话上下文。
           </DialogDescription>
         </DialogHeader>
         <DialogFooter class="sm:justify-end gap-2">
           <Button variant="ghost" @click="recallDialogOpen = false">
             取消
           </Button>
-          <Button variant="destructive" @click="confirmRecall">
-            确定撤回
+          <Button type="button" variant="destructive" @click="confirmRecall">
+            确认撤回
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -937,7 +932,6 @@ const handleAvatarClick = (url: string) => {
 }
 
 @keyframes typing-fade {
-
   0%,
   100% {
     opacity: 0.6;
@@ -1510,7 +1504,7 @@ const handleAvatarClick = (url: string) => {
   gap: 8px;
 }
 
-.thinking-section + .thinking-section {
+.thinking-section+.thinking-section {
   margin-top: 16px;
 }
 
@@ -1549,4 +1543,5 @@ const handleAvatarClick = (url: string) => {
   color: #333;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
 </style>

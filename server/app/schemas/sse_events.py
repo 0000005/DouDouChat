@@ -61,9 +61,17 @@ class DoneEventData(TypedDict):
     usage: Optional[UsageInfo]
 
 
+class MetaParticipantsEventData(TypedDict):
+    """即将发言的参与者列表 (用于群聊输入状态)"""
+    group_id: int
+    session_id: int
+    participants: list[dict]  # [{"id": 1, "name": "AgentName"}, ...]
+
+
 # SSE 事件类型枚举
 SSEEventType = Literal[
     "start",
+    "meta_participants",
     "thinking",
     "model_thinking",
     "recall_thinking",
@@ -73,3 +81,4 @@ SSEEventType = Literal[
     "error",
     "done",
 ]
+

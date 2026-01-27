@@ -480,6 +480,15 @@ class GroupChatService:
             yield {"event": "done", "data": {"message": "No AI responded"}}
             return
 
+        # 2.1 通知前端即将发言的 Agent 列表 (Story 09-10)
+        # 将在任何 thinking/message/tool 事件之前发送
+        meta_payload = {
+            "group_id": group_id,
+            "session_id": session.id,
+            "participants": [{"id": p.id, "name": p.name} for p in participants]
+        }
+        yield {"event": "meta_participants", "data": meta_payload}
+
         # 3. 为每个参与回复的 AI 创建任务
         queue = asyncio.Queue()
         

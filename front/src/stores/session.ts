@@ -24,6 +24,11 @@ export interface Message {
     senderType?: string
 }
 
+export interface GroupTypingUser {
+    id: number
+    name: string
+}
+
 /**
  * Parse message content into segments based on <message> tags.
  * If no tags are found, returns original content as a single segment.
@@ -96,6 +101,35 @@ export const useSessionStore = defineStore('session', () => {
     const currentSessionId = ref<number | null>(null)
     const currentSessions = ref<ChatAPI.ChatSession[]>([])
     const fetchError = ref<string | null>(null)
+
+    // Story 09-10: Group typing users list (per group)
+    const groupTypingUsersMap = ref<Record<string, GroupTypingUser[]>>({})
+    const groupTypingUsers = computed(() => {
+        if (chatType.value !== 'group' || !currentGroupId.value) return []
+        return groupTypingUsersMap.value['g' + currentGroupId.value] || []
+    })
+
+    const setGroupTypingUsers = (groupId: number, users: GroupTypingUser[]) => {
+        groupTypingUsersMap.value = {
+            ...groupTypingUsersMap.value,
+            ['g' + groupId]: users
+        }
+    }
+
+    const removeGroupTypingUser = (groupId: number, senderId?: string | number) => {
+        if (!senderId) return
+        const key = 'g' + groupId
+        const current = groupTypingUsersMap.value[key] || []
+        const next = current.filter(u => String(u.id) !== String(senderId))
+        groupTypingUsersMap.value = {
+            ...groupTypingUsersMap.value,
+            [key]: next
+        }
+    }
+
+    const clearGroupTypingUsers = (groupId: number) => {
+        setGroupTypingUsers(groupId, [])
+    }
 
     // Get messages for current friend or group
     const currentMessages = computed(() => {
@@ -543,6 +577,21 @@ export const useSessionStore = defineStore('session', () => {
                     if (data.session_id) {
                         capturedSessionId = data.session_id
                     }
+                } else if (event === 'meta_participants') {
+                    // Story 09-10: Update typing users list (bind by group/session)
+                    if (data.group_id && Number(data.group_id) !== groupId) {
+                        continue
+                    }
+                    if (data.session_id) {
+                        if (!capturedSessionId) {
+                            capturedSessionId = data.session_id
+                        } else if (capturedSessionId !== data.session_id) {
+                            continue
+                        }
+                    }
+                    if (data.participants && Array.isArray(data.participants)) {
+                        setGroupTypingUsers(groupId, data.participants)
+                    }
                 } else if (event === 'message' || event === 'model_thinking' || event === 'thinking' || event === 'recall_thinking' || event === 'tool_call' || event === 'tool_result') {
                     const senderId = data.sender_id
                     if (!senderId) continue
@@ -590,6 +639,9 @@ export const useSessionStore = defineStore('session', () => {
                     }
                 } else if (event === 'done') {
                     const senderId = data.sender_id
+                    if (data.session_id && capturedSessionId && data.session_id !== capturedSessionId) {
+                        continue
+                    }
                     if (!capturedSessionId && data.session_id) {
                         capturedSessionId = data.session_id
                     }
@@ -603,15 +655,20 @@ export const useSessionStore = defineStore('session', () => {
                             aiMessages[senderId].content = data.content
                         }
                     }
+                    // Story 09-10: Remove from typing list on done
+                    removeGroupTypingUser(groupId, senderId)
                 }
                 else if (event === 'error') {
                     console.error('Group stream error:', data)
+                    // Story 09-10: Remove from typing list on error
+                    removeGroupTypingUser(groupId, data.sender_id)
                 }
             }
         } catch (error) {
             console.error('Failed to send group message:', error)
         } finally {
             streamingMap.value['g' + groupId] = false
+            clearGroupTypingUsers(groupId) // Ensure clean state
         }
     }
 
@@ -749,7 +806,8 @@ export const useSessionStore = defineStore('session', () => {
                     modelThinkingBuffer += data.delta || ''
                 } else if (event === 'recall_thinking') {
                     streamingMap.value['f' + friendId] = true
-                    recallThinkingBuffer += data.delta || ''
+                    const delta = data.delta || ''
+                    recallThinkingBuffer += delta
                 } else if (event === 'message') {
                     streamingMap.value['f' + friendId] = true
                     contentBuffer += data.delta || ''
@@ -818,6 +876,7 @@ export const useSessionStore = defineStore('session', () => {
         unreadCounts,
         messagesMap,
         streamingMap,
+        groupTypingUsers,
         currentMessages,
         currentSessions,
         currentSessionId,
