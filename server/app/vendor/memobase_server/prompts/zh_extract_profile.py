@@ -114,7 +114,7 @@ def get_few_shot_messages() -> list[dict]:
     return [
         {
             "role": "user",
-            "content": """#### 已有的主题
+            "content": """#### 已有的主题（few shot，仅用于测试）
 如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:
 
 #### 备忘录
@@ -135,7 +135,7 @@ def get_few_shot_messages() -> list[dict]:
         },
         {
             "role": "user",
-            "content": """#### 已有的主题
+            "content": """#### 已有的主题（few shot，仅用于测试）
 如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:
 
 #### 备忘录
@@ -152,7 +152,7 @@ def get_few_shot_messages() -> list[dict]:
         },
         {
             "role": "user",
-            "content": """#### 已有的主题
+            "content": """#### 已有的主题（few shot，仅用于测试）
 如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:
 
 #### 备忘录
@@ -169,7 +169,7 @@ def get_few_shot_messages() -> list[dict]:
         },
         {
             "role": "user",
-            "content": """#### 已有的主题
+            "content": """#### 已有的主题（few shot，仅用于测试）
 如果提取相关的主题/子主题，请考虑使用下面的主题/子主题命名:
 
 #### 备忘录

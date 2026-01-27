@@ -96,7 +96,7 @@ def get_few_shot_messages() -> list[dict]:
     return [
         {
             "role": "user",
-            "content": f"""### 已记录
+            "content": f"""### 已记录（few shot，仅用于测试）
 - 工作{sep}状态{sep}最近在找新工作
 
 ### 输入对话
@@ -117,7 +117,7 @@ def get_few_shot_messages() -> list[dict]:
         },
         {
             "role": "user",
-            "content": f"""### 已记录
+            "content": f"""### 已记录（few shot，仅用于测试）
 
 ### 输入对话
 - [2024/06/05 19:10] user: 周末要带孩子去看牙。
@@ -133,7 +133,7 @@ def get_few_shot_messages() -> list[dict]:
         },
         {
             "role": "user",
-            "content": f"""### 已记录
+            "content": f"""### 已记录（few shot，仅用于测试）
 
 ### 输入对话
 - [2024/06/08 08:20] user: 最近在健身，计划周三跑步。
@@ -149,7 +149,7 @@ def get_few_shot_messages() -> list[dict]:
         },
         {
             "role": "user",
-            "content": f"""### 已记录
+            "content": f"""### 已记录（few shot，仅用于测试）
 
 ### 输入对话
 - [2024/06/12 22:05] user: 上个月感冒了，现在好多了。
