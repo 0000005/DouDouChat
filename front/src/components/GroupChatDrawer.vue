@@ -18,7 +18,6 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import {
     Plus,
@@ -292,11 +291,7 @@ const handleClose = () => {
                             </template>
                         </div>
                     </div>
-                    <div class="menu-item flex justify-between items-center">
-                        <span class="menu-label">自动回复</span>
-                        <Switch :model-value="groupInfo.auto_reply"
-                            @update:model-value="(val) => groupStore.updateGroupSettings(groupInfo.id, { auto_reply: val }).then(updated => groupInfo = { ...groupInfo, auto_reply: updated.auto_reply })" />
-                    </div>
+
                     <div class="mt-8 px-4 pb-2">
                         <Button variant="outline" class="w-full text-gray-600 border-gray-200 hover:bg-gray-50"
                             @click="showClearConfirm = true">清空聊天记录</Button>

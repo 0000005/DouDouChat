@@ -137,11 +137,6 @@ class GroupChatService:
                         participants.append(friend)
                 except (ValueError, TypeError):
                     continue
-        # Story 09-06: 严格遵守"只有被@时才发言"规则 (AC-2)
-        # 即使开启了 auto_reply，也只有被提及的 AI 才会参与回复
-        # elif group.auto_reply:
-        #     ... 暂不自动回复 ...
-        pass
 
         if not participants:
             yield {"event": "done", "data": {"message": "No AI responded"}}

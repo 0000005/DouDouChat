@@ -29,7 +29,6 @@ def upgrade() -> None:
     sa.Column('avatar', sa.String(length=255), nullable=True),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('owner_id', sa.String(length=64), nullable=False),
-    sa.Column('auto_reply', sa.Boolean(), nullable=False),
     sa.Column('create_time', UTCDateTime(), nullable=False),
     sa.Column('update_time', UTCDateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_groups'))

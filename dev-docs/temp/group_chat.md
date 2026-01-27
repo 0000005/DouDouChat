@@ -32,22 +32,36 @@ you are a ....
 ---system prompt---
 
 ---user message---
-今天茅台又涨了
+今天有什么好股票吗？
 ---user message---
 
----mock---
+---mock1---
 invoke function tool call : get_other_members_messages
----mock---
+---mock1---
 
----mock---
+---mock1---
+function tool result:
+张三：科技股现在不错
+---mock1---
+
+---user message---
+哈哈，今天茅台又涨了
+---user message---
+
+---mock2---
+invoke function tool call : get_other_members_messages
+---mock2---
+
+---mock2---
 function tool result:
 张三：哈哈，预料之中，后面应该还会涨
 李四：诶呀，抛早了
----mock---
+---mock2---
 
----群成员发言---
-assistant message：我觉得马上就是下行了，大家拭目以待吧
----群成员发言---
+---被提及的群成员发言---
+Assistant message：我觉得马上就是下行了，大家拭目以待吧
+---被提及的群成员发言---
+```
 
 ## 5、消息发送
 - 普通消息

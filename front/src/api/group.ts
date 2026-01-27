@@ -16,7 +16,6 @@ export interface GroupRead {
     avatar?: string;
     description?: string;
     owner_id: string;
-    auto_reply: boolean;
     member_count?: number;
     members?: GroupMember[];
     create_time: string;
@@ -32,14 +31,12 @@ export interface GroupCreate {
     member_ids: string[]; // List of persona_ids
     description?: string;
     avatar?: string;
-    auto_reply?: boolean;
 }
 
 export interface GroupUpdate {
     name?: string;
     description?: string;
     avatar?: string;
-    auto_reply?: boolean;
 }
 
 export interface GroupMessageRead {

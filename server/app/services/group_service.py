@@ -83,8 +83,7 @@ class GroupService:
                 name=group_in.name,
                 avatar=group_in.avatar,
                 description=group_in.description,
-                owner_id=owner_id,
-                auto_reply=group_in.auto_reply
+                owner_id=owner_id
             )
             db.add(db_group)
             db.flush()  # Get group ID

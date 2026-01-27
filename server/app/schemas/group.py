@@ -50,7 +50,6 @@ class GroupBase(BaseModel):
     name: str
     avatar: Optional[str] = None
     description: Optional[str] = None
-    auto_reply: bool = True
 
 class GroupCreate(GroupBase):
     member_ids: List[str] # Initial members (usually friends)
@@ -59,7 +58,6 @@ class GroupUpdate(BaseModel):
     name: Optional[str] = None
     avatar: Optional[str] = None
     description: Optional[str] = None
-    auto_reply: Optional[bool] = None
 
 class GroupRead(GroupBase):
     id: int

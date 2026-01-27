@@ -12,7 +12,6 @@ class Group(Base):
     avatar = Column(String(255), nullable=True)
     description = Column(Text, nullable=True)
     owner_id = Column(String(64), nullable=False)
-    auto_reply = Column(Boolean, default=True, nullable=False)
     create_time = Column(UTCDateTime, default=utc_now, nullable=False)
     update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
