@@ -319,6 +319,6 @@ WeAgentChat 的诞生离不开以下优秀的开源项目：
 扫描下方二维码加入我们的微信群，交流产品使用问题，获取最新动态：
 
 <p align="center">
-  <img src="website/assets/wechat_group.jpg" alt="WeChat Group" width="300">
+  <img src="website/assets/group_qrcode.jpg" alt="WeChat Group" width="300">
 </p>
 
