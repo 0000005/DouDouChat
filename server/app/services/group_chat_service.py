@@ -666,6 +666,23 @@ class GroupChatService:
                 # 注入群聊规则 (Story 09-06)
                 try:
                     group_rule = get_prompt("chat/group_chat_rule.txt").strip()
+                    
+                    # 填充 {memberList}
+                    if "{memberList}" in group_rule:
+                        all_friends_map = GroupChatService._get_group_friend_map(db, group_id)
+                        member_list_parts = []
+                        for f in all_friends_map.values():
+                            if f.id == friend_id:  # 排除正在发言的自己
+                                continue
+                            desc = (f.description or "暂无简介").strip()
+                            member_list_parts.append(f"{f.name}：{desc}")
+                        member_list_str = "\n".join(member_list_parts)
+                        group_rule = group_rule.replace("{memberList}", member_list_str)
+                    
+                    # 填充 {name}
+                    if "{name}" in group_rule:
+                        group_rule = group_rule.replace("{name}", friend.name)
+
                     persona_prompt = f"{persona_prompt}\n\n{group_rule}"
                 except Exception as e:
                     logger.warning(f"Failed to load group_chat_rule: {e}")
@@ -685,10 +702,9 @@ class GroupChatService:
                 
                 try:
                     root_template = get_prompt("chat/root_system_prompt.txt")
-                    # 群聊特有的上下文提示
-                    group_context = f"\n\n你现在在群聊中，你的名字是 {friend.name}。只有被@时才发言，其他时候保持沉默并输出 {CTRL_NO_REPLY}。"
                     
-                    final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt + group_context)
+                    # persona_prompt 已包含人设与群聊规则
+                    final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt)
                     final_instructions = final_instructions.replace("{{script-expression}}", f"\n\n{script_prompt}" if script_prompt else "")
                     final_instructions = final_instructions.replace("{{user-profile}}", f"\n\n【用户信息】\n{profile_data}" if profile_data else "")
                     final_instructions = final_instructions.replace("{{segment-instruction}}", f"\n\n{segment_prompt}" if segment_prompt else "")
