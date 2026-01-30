@@ -27,6 +27,7 @@ class GroupSession(Base):
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     title = Column(String(128), default="群聊会话", nullable=True)
+    session_type = Column(String(20), default="normal", nullable=False)
     create_time = Column(UTCDateTime, default=utc_now, nullable=False)
     update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
     ended = Column(Boolean, default=False, nullable=False)
@@ -64,6 +65,7 @@ class GroupMessage(Base):
     content = Column(Text, nullable=False)
     message_type = Column(String(20), default="text", nullable=False) # 'text', 'system', '@'
     mentions = Column(JSON, nullable=True) # List of member IDs
+    debate_side = Column(String(20), nullable=True) # 'affirmative' / 'negative'
     create_time = Column(UTCDateTime, default=utc_now, nullable=False)
     update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
@@ -74,3 +76,35 @@ class GroupMessage(Base):
     # Relationships
     group = relationship("Group", back_populates="messages")
     session = relationship("GroupSession", back_populates="messages")
+
+    @property
+    def session_type(self):
+        return self.session.session_type if self.session else None
+
+
+class GroupAutoDriveRun(Base):
+    __tablename__ = "group_auto_drive_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("group_sessions.id"), nullable=False)
+    mode = Column(String(20), nullable=False)
+    topic_json = Column(JSON, nullable=False)
+    roles_json = Column(JSON, nullable=False)
+    turn_limit = Column(Integer, nullable=False)
+    end_action = Column(String(20), nullable=False)
+    judge_id = Column(String(64), nullable=True)
+    summary_by = Column(String(64), nullable=True)
+    status = Column(String(20), nullable=False, default="running")
+    phase = Column(String(32), nullable=True)
+    current_round = Column(Integer, nullable=False, default=0)
+    current_turn = Column(Integer, nullable=False, default=0)
+    next_speaker_id = Column(String(64), nullable=True)
+    pause_reason = Column(String(128), nullable=True)
+    started_at = Column(UTCDateTime, default=utc_now, nullable=False)
+    ended_at = Column(UTCDateTime, nullable=True)
+    create_time = Column(UTCDateTime, default=utc_now, nullable=False)
+    update_time = Column(UTCDateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    group = relationship("Group", foreign_keys=[group_id])
+    session = relationship("GroupSession", foreign_keys=[session_id])

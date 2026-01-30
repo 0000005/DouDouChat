@@ -16,20 +16,24 @@ from openai.types.responses import ResponseTextDeltaEvent
 CTRL_NO_REPLY = "<CTRL:NO_REPLY>"
 
 
-def create_group_session(db: Session, group_id: int, title: Optional[str] = None) -> GroupSession:
-    session = GroupSession(group_id=group_id, title=title or "群聊会话")
+def create_group_session(
+    db: Session,
+    group_id: int,
+    title: Optional[str] = None,
+    session_type: str = "normal",
+) -> GroupSession:
+    session = GroupSession(group_id=group_id, title=title or "群聊会话", session_type=session_type)
     db.add(session)
     db.commit()
     db.refresh(session)
     return session
 
 
-def end_active_sessions(db: Session, group_id: int) -> List[GroupSession]:
-    sessions = (
-        db.query(GroupSession)
-        .filter(GroupSession.group_id == group_id, GroupSession.ended == False)
-        .all()
-    )
+def end_active_sessions(db: Session, group_id: int, session_type: Optional[str] = None) -> List[GroupSession]:
+    query = db.query(GroupSession).filter(GroupSession.group_id == group_id, GroupSession.ended == False)
+    if session_type is not None:
+        query = query.filter(GroupSession.session_type == session_type)
+    sessions = query.all()
     if not sessions:
         return []
     now_time = datetime.now(timezone.utc)
@@ -70,6 +74,7 @@ def create_ai_placeholder(
     session_id: int,
     friend_id: int,
     message_type: str = "text",
+    debate_side: Optional[str] = None,
 ) -> GroupMessage:
     db_ai_msg = GroupMessage(
         group_id=group_id,
@@ -78,6 +83,7 @@ def create_ai_placeholder(
         sender_type="friend",
         content="",
         message_type=message_type,
+        debate_side=debate_side,
     )
     db.add(db_ai_msg)
     db.commit()

@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 # Type aliases
 MemberType = Literal["user", "friend"]
 MessageType = Literal["text", "system", "@"]
+SessionType = Literal["normal", "brainstorm", "decision", "debate"]
+DebateSide = Literal["affirmative", "negative"]
 
 # --- Group Member Schemas ---
 class GroupMemberBase(BaseModel):
@@ -29,6 +31,7 @@ class GroupMessageBase(BaseModel):
     content: str
     message_type: MessageType = "text"
     mentions: Optional[List[str]] = None
+    debate_side: Optional[DebateSide] = None
 
 class GroupMessageCreate(GroupMessageBase):
     enable_thinking: bool = False
@@ -40,6 +43,7 @@ class GroupMessageRead(GroupMessageBase):
     session_id: int
     sender_id: str
     sender_type: MemberType
+    session_type: Optional[SessionType] = None
     create_time: datetime
     update_time: datetime
 
@@ -81,6 +85,7 @@ class GroupSessionRead(BaseModel):
     id: int
     group_id: int
     title: Optional[str] = None
+    session_type: SessionType = "normal"
     create_time: datetime
     update_time: datetime
     ended: bool

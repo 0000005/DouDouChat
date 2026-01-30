@@ -170,14 +170,18 @@ class GroupChatService:
     def _get_active_group_session(db: Session, group_id: int) -> Optional[GroupSession]:
         return (
             db.query(GroupSession)
-            .filter(GroupSession.group_id == group_id, GroupSession.ended == False)
+            .filter(
+                GroupSession.group_id == group_id,
+                GroupSession.session_type == "normal",
+                GroupSession.ended == False,
+            )
             .order_by(GroupSession.id.desc())
             .first()
         )
 
     @staticmethod
     def _create_group_session(db: Session, group_id: int, title: Optional[str] = None) -> GroupSession:
-        return group_chat_shared.create_group_session(db, group_id, title)
+        return group_chat_shared.create_group_session(db, group_id, title, session_type="normal")
 
     @staticmethod
     def get_or_create_session_for_group(db: Session, group_id: int) -> GroupSession:
@@ -210,7 +214,7 @@ class GroupChatService:
 
     @staticmethod
     def create_group_session(db: Session, group_id: int) -> GroupSession:
-        active_sessions = group_chat_shared.end_active_sessions(db, group_id)
+        active_sessions = group_chat_shared.end_active_sessions(db, group_id, session_type="normal")
         if active_sessions:
             for session in active_sessions:
                 logger.info(f"[GroupSession] Manual new session: Ending session {session.id}. (NO memory extraction - group chat policy)")
