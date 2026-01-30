@@ -13,6 +13,7 @@ from app.services.llm_service import llm_service
 from app.services.settings_service import SettingsService
 from app.services.embedding_service import embedding_service
 from app.services import provider_rules
+from app.services import group_chat_shared
 from app.prompt import get_prompt
 from app.db.session import SessionLocal
 from app.services.memo.constants import DEFAULT_USER_ID, DEFAULT_SPACE_ID
@@ -21,18 +22,9 @@ from app.services.memo.bridge import MemoService
 
 from openai import AsyncOpenAI
 from openai.types.shared import Reasoning
-from openai.types.responses import (
-    ResponseOutputText,
-    ResponseTextDeltaEvent,
-)
 from agents import Agent, ModelSettings, RunConfig, Runner, function_tool, set_default_openai_client, set_default_openai_api
-from agents.items import MessageOutputItem, ReasoningItem, ToolCallItem, ToolCallOutputItem
-from agents.stream_events import RunItemStreamEvent
 
 logger = logging.getLogger(__name__)
-
-# Story 09-06: 控制符常量
-CTRL_NO_REPLY = "<CTRL:NO_REPLY>"
 
 def _model_base_name(model_name: Optional[str]) -> str:
     if not model_name:
@@ -41,48 +33,6 @@ def _model_base_name(model_name: Optional[str]) -> str:
 
 def _supports_sampling(model_name: Optional[str]) -> bool:
     return not _model_base_name(model_name).startswith("gpt-5")
-
-def _extract_reasoning_text(raw: object) -> str:
-    if raw is None:
-        return ""
-    if isinstance(raw, str):
-        return raw
-
-    def _collect_text(value: object) -> List[str]:
-        texts: List[str] = []
-        if not value:
-            return texts
-        if isinstance(value, (list, tuple)):
-            for entry in value:
-                texts.extend(_collect_text(entry))
-            return texts
-        if isinstance(value, dict):
-            text = value.get("text") or value.get("content")
-            if text:
-                texts.append(str(text))
-            return texts
-        text = getattr(value, "text", None) or getattr(value, "content", None)
-        if text:
-            texts.append(str(text))
-        return texts
-
-    if isinstance(raw, dict):
-        text = raw.get("reasoning_content") or raw.get("reasoning") or raw.get("text")
-        if text:
-            return str(text)
-        content = raw.get("content")
-        summary = raw.get("summary")
-    else:
-        text = getattr(raw, "reasoning_content", None) or getattr(raw, "reasoning", None) or getattr(raw, "text", None)
-        if text:
-            return str(text)
-        content = getattr(raw, "content", None)
-        summary = getattr(raw, "summary", None)
-
-    texts = _collect_text(content)
-    if not texts:
-        texts = _collect_text(summary)
-    return "\n".join([t for t in texts if t])
 
 class GroupChatService:
     @staticmethod
@@ -227,11 +177,7 @@ class GroupChatService:
 
     @staticmethod
     def _create_group_session(db: Session, group_id: int, title: Optional[str] = None) -> GroupSession:
-        session = GroupSession(group_id=group_id, title=title or "群聊会话")
-        db.add(session)
-        db.commit()
-        db.refresh(session)
-        return session
+        return group_chat_shared.create_group_session(db, group_id, title)
 
     @staticmethod
     def get_or_create_session_for_group(db: Session, group_id: int) -> GroupSession:
@@ -264,18 +210,10 @@ class GroupChatService:
 
     @staticmethod
     def create_group_session(db: Session, group_id: int) -> GroupSession:
-        active_sessions = (
-            db.query(GroupSession)
-            .filter(GroupSession.group_id == group_id, GroupSession.ended == False)
-            .all()
-        )
+        active_sessions = group_chat_shared.end_active_sessions(db, group_id)
         if active_sessions:
-            now_time = datetime.now(timezone.utc)
             for session in active_sessions:
                 logger.info(f"[GroupSession] Manual new session: Ending session {session.id}. (NO memory extraction - group chat policy)")
-                session.ended = True
-                session.update_time = now_time
-            db.commit()
         return GroupChatService._create_group_session(db, group_id)
 
     @staticmethod
@@ -417,22 +355,16 @@ class GroupChatService:
         session = GroupChatService.get_or_create_session_for_group(db, group_id)
 
         # 1. 保存用户消息
-        db_message = GroupMessage(
+        db_message = group_chat_shared.create_user_message(
+            db=db,
             group_id=group_id,
             session_id=session.id,
             sender_id=sender_id,
-            sender_type="user",
             content=message_in.content,
             message_type=message_in.message_type,
-            mentions=message_in.mentions
+            mentions=message_in.mentions,
         )
-        db.add(db_message)
-        db.commit()
-        db.refresh(db_message)
-        now_time = datetime.now(timezone.utc)
-        session.last_message_time = now_time
-        session.update_time = now_time
-        db.commit()
+        group_chat_shared.touch_session(db, session)
 
         llm_config = llm_service.get_active_config(db)
         model_name = llm_config.model_name if llm_config else "unknown"
@@ -504,17 +436,13 @@ class GroupChatService:
         active_tasks = []
         for friend in participants:
             # 为 AI 创建消息占位符
-            db_ai_msg = GroupMessage(
+            db_ai_msg = group_chat_shared.create_ai_placeholder(
+                db=db,
                 group_id=group_id,
                 session_id=session.id,
-                sender_id=str(friend.id),
-                sender_type="friend",
-                content="",
-                message_type="text"
+                friend_id=friend.id,
+                message_type="text",
             )
-            db.add(db_ai_msg)
-            db.commit()
-            db.refresh(db_ai_msg)
             
             task = asyncio.create_task(GroupChatService._run_group_ai_generation_task(
                 group_id=group_id,
@@ -572,29 +500,21 @@ class GroupChatService:
                 
                 # 2. 准备历史记录与召回
                 # 获取最近 15 条消息
-                history_msgs = (
-                    db.query(GroupMessage)
-                    .filter(
-                        GroupMessage.group_id == group_id,
-                        GroupMessage.session_id == session_id,
-                        GroupMessage.id < user_msg_id
-                    )
-                    .order_by(GroupMessage.create_time.desc())
-                    .limit(15)
-                    .all()
+                history_msgs = group_chat_shared.fetch_group_history(
+                    db=db,
+                    group_id=group_id,
+                    session_id=session_id,
+                    before_id=user_msg_id,
+                    limit=15,
                 )
-                history_msgs.reverse()
-                
+
                 # 姓名映射 (用于让 AI 区分谁在说话)
-                member_ids = {msg.sender_id for msg in history_msgs}
-                f_ids = []
-                for mid in member_ids:
-                    try: f_ids.append(int(mid))
-                    except (ValueError, TypeError): continue
-                
-                friends_data = db.query(Friend).filter(Friend.id.in_(f_ids)).all()
-                name_map = {str(f.id): f.name for f in friends_data}
-                name_map[DEFAULT_USER_ID] = "我"
+                name_map = group_chat_shared.build_name_map(
+                    db=db,
+                    messages=history_msgs,
+                    default_user_name="我",
+                    default_user_id=DEFAULT_USER_ID,
+                )
                 
                 # 记忆召回
                 profile_data = ""
@@ -703,13 +623,14 @@ class GroupChatService:
                 
                 try:
                     root_template = get_prompt("chat/root_system_prompt.txt")
-                    
-                    # persona_prompt 已包含人设与群聊规则
-                    final_instructions = root_template.replace("{{role-play-prompt}}", persona_prompt)
-                    final_instructions = final_instructions.replace("{{script-expression}}", f"\n\n{script_prompt}" if script_prompt else "")
-                    final_instructions = final_instructions.replace("{{user-profile}}", f"\n\n【用户信息】\n{profile_data}" if profile_data else "")
-                    final_instructions = final_instructions.replace("{{segment-instruction}}", f"\n\n{segment_prompt}" if segment_prompt else "")
-                    final_instructions = final_instructions.replace("{{current-time}}", current_time)
+                    final_instructions = group_chat_shared.build_system_prompt(
+                        root_template=root_template,
+                        persona_prompt=persona_prompt,
+                        script_prompt=script_prompt,
+                        profile_data=profile_data,
+                        segment_prompt=segment_prompt,
+                        current_time=current_time,
+                    )
                 except Exception:
                     final_instructions = f"{persona_prompt}\n\n{script_prompt}\n\n{current_time}"
 
@@ -748,94 +669,16 @@ class GroupChatService:
                     return mention_result
 
                 # 4. 构建消息列表 (Mock Tool Call 模式 - Story 09-06)
-                agent_messages = []
-                
-                # 将历史记录切分为以“人类消息”开头的轮次
-                rounds = []
-                current_round = None
-                
-                for msg in history_msgs:
-                    if msg.sender_type == "user":
-                        if current_round:
-                            rounds.append(current_round)
-                        current_round = {"user": msg, "others": [], "self": None}
-                    else:
-                        if current_round:
-                            if msg.sender_type == "friend" and msg.sender_id == str(friend_id):
-                                current_round["self"] = msg
-                            else:
-                                current_round["others"].append(msg)
-                        else:
-                            # 历史开头的非用户消息，先忽略或归入虚拟轮次
-                            pass
-                if current_round:
-                    rounds.append(current_round)
-
-                # 转换为上帝视角格式（使用 Agents Item 格式）
-                for r in rounds:
-                    u_msg = r["user"]
-                    agent_messages.append({"role": "user", "content": u_msg.content})
-                    
-                    # 虚拟工具 Item：获取其他成员发言
-                    others_content = "\n".join([f"{name_map.get(m.sender_id, '未知')}: {m.content}" for m in r["others"]])
-                    if not others_content:
-                        others_content = "(empty)"
-                    
-                    tc_id_hist = f"call_get_msgs_{u_msg.id}"
-                    agent_messages.append({
-                        "type": "function_call",
-                        "call_id": tc_id_hist,
-                        "name": "get_other_members_messages",
-                        "arguments": "{}"
-                    })
-                    agent_messages.append({
-                        "type": "function_call_output",
-                        "call_id": tc_id_hist,
-                        "output": others_content
-                    })
-                    
-                    # 补齐发言历史 Item
-                    if r["self"] and r["self"].content.strip():
-                        agent_messages.append({"role": "assistant", "content": r["self"].content})
-                    else:
-                        agent_messages.append({"role": "assistant", "content": CTRL_NO_REPLY})
-                
-                # 注入召回信息 (保持在当前消息前)
-                if injected_recall_messages:
-                    # 允许注入全部 Item (包括 function_call/function_call_output)
-                    agent_messages.extend(injected_recall_messages)
-                
-                # 5. 当前轮次注入
-                agent_messages.append({"role": "user", "content": message_content})
-                
-                # 注入当前轮次的 Mock 工具调用 Item
-                # get_other_members_messages
-                tc_id_curr = f"call_curr_msgs_{user_msg_id}"
-                agent_messages.append({
-                    "type": "function_call",
-                    "call_id": tc_id_curr,
-                    "name": "get_other_members_messages",
-                    "arguments": "{}"
-                })
-                agent_messages.append({
-                    "type": "function_call_output",
-                    "call_id": tc_id_curr,
-                    "output": current_other_members # 并行执行时，尚未有其他 AI 回复
-                })
-                
-                # is_mentioned
-                tc_id_ment = f"call_ment_{user_msg_id}"
-                agent_messages.append({
-                    "type": "function_call",
-                    "call_id": tc_id_ment,
-                    "name": "is_mentioned",
-                    "arguments": "{}"
-                })
-                agent_messages.append({
-                    "type": "function_call_output",
-                    "call_id": tc_id_ment,
-                    "output": mention_result
-                })
+                agent_messages = group_chat_shared.build_group_context(
+                    history_msgs=history_msgs,
+                    name_map=name_map,
+                    self_id=friend_id,
+                    current_user_msg=message_content,
+                    user_msg_id=user_msg_id,
+                    current_other_members=current_other_members,
+                    mention_result=mention_result,
+                    injected_recall_messages=injected_recall_messages,
+                )
 
                 # AC-4: 后端日志中可确认 AI Context 包含格式化的 Tool Result 消息
                 logger.info(f"[GroupGenTask] AI Context (Items) for {friend_name} (ID: {friend_id}):\n{json.dumps(agent_messages, ensure_ascii=False, indent=2)}")
@@ -872,244 +715,23 @@ class GroupChatService:
                     instructions=final_instructions,
                     model=agent_model,
                     model_settings=model_settings,
-                    tools=[tool_recall, tool_get_other_members_messages, tool_is_mentioned],
+                    tools=group_chat_shared.build_agent_tools(
+                        tool_recall,
+                        tool_get_other_members_messages,
+                        tool_is_mentioned,
+                    ),
                 )
                 
-                content_buffer = ""
-                has_reasoning_item = False
-                tool_call_names = {}
-                usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-                
-                result = Runner.run_streamed(agent, agent_messages, run_config=RunConfig(trace_include_sensitive_data=True))
-                
-                # 定义解析工具函数（如果当前作用域没有定义）
-                def _internal_extract_reasoning(raw: object) -> str:
-                    if raw is None: return ""
-                    if isinstance(raw, str): return raw
-                    # 简化地提取 text/content
-                    if isinstance(raw, dict):
-                        return str(raw.get("reasoning_content") or raw.get("reasoning") or raw.get("text") or raw.get("content") or "")
-                    else:
-                        return str(getattr(raw, "reasoning_content", None) or getattr(raw, "reasoning", None) or getattr(raw, "text", None) or getattr(raw, "content", None) or "")
-
-
-                buffer = ""
-                is_thinking_tag = False
-                think_fallback_buffer = ""
-                THINK_START = "<think>"
-                THINK_END = "</think>"
-                saved_content = ""
-
-                async for event in result.stream_events():
-                    # 处理思考过程 (DeepSeek reason_item)
-                    if isinstance(event, RunItemStreamEvent) and event.name == "reasoning_item_created":
-                        if enable_thinking and isinstance(event.item, ReasoningItem):
-                            has_reasoning_item = True
-                            raw = event.item.raw_item
-                            text = _internal_extract_reasoning(raw)
-                            if text:
-                                await queue.put({
-                                    "event": "model_thinking", 
-                                    "data": {
-                                        "sender_id": str(friend_id),
-                                        "delta": text,
-                                        "message_id": ai_msg_id
-                                    }
-                                })
-                        continue
-                    
-                    if isinstance(event, RunItemStreamEvent) and event.name == "tool_called":
-                        if isinstance(event.item, ToolCallItem):
-                            raw = event.item.raw_item
-                            if isinstance(raw, dict):
-                                name = raw.get("name")
-                                call_id = raw.get("call_id")
-                                arguments = raw.get("arguments")
-                            else:
-                                name = getattr(raw, "name", None)
-                                call_id = getattr(raw, "call_id", None)
-                                arguments = getattr(raw, "arguments", None)
-                            
-                            if call_id and name:
-                                tool_call_names[call_id] = name
-                                
-                            await queue.put({
-                                "event": "tool_call",
-                                "data": {
-                                    "sender_id": str(friend_id),
-                                    "tool_name": name or "tool",
-                                    "arguments": arguments,
-                                    "call_id": call_id,
-                                    "message_id": ai_msg_id
-                                },
-                            })
-                        continue
-
-                    if isinstance(event, RunItemStreamEvent) and event.name == "tool_output":
-                        if isinstance(event.item, ToolCallOutputItem):
-                            raw = event.item.raw_item
-                            if isinstance(raw, dict):
-                                call_id = raw.get("call_id")
-                            else:
-                                call_id = getattr(raw, "call_id", None)
-                            
-                            if call_id:
-                                name = tool_call_names.get(call_id, "tool")
-                            else:
-                                name = "tool"
-                                
-                            await queue.put({
-                                "event": "tool_result",
-                                "data": {
-                                    "sender_id": str(friend_id),
-                                    "tool_name": name,
-                                    "result": event.item.output,
-                                    "call_id": call_id,
-                                    "message_id": ai_msg_id
-                                },
-                            })
-                        continue
-                    
-                    # 处理文本内容
-                    if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
-                        delta = event.data.delta
-                        if delta:
-                            content_buffer += delta
-                            # 处理 <think> 标签逻辑
-                            buffer += delta
-                            
-                            while buffer:
-                                if not is_thinking_tag:
-                                    start_idx = buffer.find(THINK_START)
-                                    if start_idx != -1:
-                                        # 发现开始标签前的内容为正文
-                                        if start_idx > 0:
-                                            msg_delta = buffer[:start_idx]
-                                            saved_content += msg_delta
-                                            await queue.put({
-                                                "event": "message",
-                                                "data": {
-                                                    "sender_id": str(friend_id),
-                                                    "delta": msg_delta,
-                                                    "message_id": ai_msg_id
-                                                }
-                                            })
-                                        buffer = buffer[start_idx + len(THINK_START):]
-                                        is_thinking_tag = True
-                                    else:
-                                        # 没有开始标签
-                                        if "<" not in buffer:
-                                            # 安全，全部输出
-                                            saved_content += buffer
-                                            await queue.put({
-                                                "event": "message",
-                                                "data": {
-                                                    "sender_id": str(friend_id),
-                                                    "delta": buffer,
-                                                    "message_id": ai_msg_id
-                                                }
-                                            })
-                                            buffer = ""
-                                        else:
-                                            # 可能有标签，等待更多字符
-                                            break
-                                else:
-                                    # 在思考标签内
-                                    end_idx = buffer.find(THINK_END)
-                                    if end_idx != -1:
-                                        # 发现结束标签
-                                        if end_idx > 0 and enable_thinking and not has_reasoning_item:
-                                            think_chunk = buffer[:end_idx]
-                                            think_fallback_buffer += think_chunk
-                                            await queue.put({
-                                                "event": "model_thinking",
-                                                "data": {
-                                                    "sender_id": str(friend_id),
-                                                    "delta": think_chunk,
-                                                    "message_id": ai_msg_id
-                                                }
-                                            })
-                                        
-                                        buffer = buffer[end_idx + len(THINK_END):]
-                                        is_thinking_tag = False
-                                    else:
-                                        # 没发现结束标签
-                                        if "</" not in buffer:
-                                            if enable_thinking and not has_reasoning_item:
-                                                think_fallback_buffer += buffer
-                                                await queue.put({
-                                                    "event": "model_thinking",
-                                                    "data": {
-                                                        "sender_id": str(friend_id),
-                                                        "delta": buffer,
-                                                        "message_id": ai_msg_id
-                                                    }
-                                                })
-                                            buffer = ""
-                                        else:
-                                            break
-
-                
-                # 处理剩余 buffer
-                if buffer:
-                    if is_thinking_tag:
-                        if enable_thinking and not has_reasoning_item:
-                            think_fallback_buffer += buffer
-                            await queue.put({
-                                "event": "model_thinking",
-                                "data": {
-                                    "sender_id": str(friend_id),
-                                    "delta": buffer,
-                                    "message_id": ai_msg_id
-                                }
-                            })
-                    else:
-                        saved_content += buffer
-                        await queue.put({
-                            "event": "message",
-                            "data": {
-                                "sender_id": str(friend_id),
-                                "delta": buffer,
-                                "message_id": ai_msg_id
-                            }
-                        })
-
-                
-                # 最后如果只使用了 content_buffer 但经过过滤后 saved_content 为空且也没提取到思考内容
-                # 说明可能全被当做 content 了，或者 content_buffer 就是最终纯文本
-                # 在此为了保险，持久化时使用 content_buffer (包含所有原文)，或者 saved_content (仅正文)
-                # 通常我们希望存纯净的正文到 content 字段，思考过程可以放另一字段或者直接不存(目前模型没此字段)
-                # 这里为了保持一致，我们优先使用 filter 后的正文作为 content
-                
-                final_content = saved_content if saved_content else content_buffer
-                # 去除可能残余的标签
-                final_content = final_content.replace(THINK_START, "").replace(THINK_END, "")
-
-
-                # 6. 持久化
-                db_msg = db.query(GroupMessage).filter(GroupMessage.id == ai_msg_id).first()
-                if db_msg:
-                    db_msg.content = final_content
-                    db.commit()
-                    group_session = db.query(GroupSession).filter(GroupSession.id == session_id).first()
-                    if group_session:
-                        now_time = datetime.now(timezone.utc)
-                        group_session.last_message_time = now_time
-                        group_session.update_time = now_time
-                        db.commit()
-
-                usage["completion_tokens"] = len(content_buffer)
-                # 发送完成事件
-                await queue.put({
-                    "event": "done", 
-                    "data": {
-                        "sender_id": str(friend_id),
-                        "message_id": ai_msg_id,
-                        "session_id": session_id,
-                        "content": final_content,
-                        "usage": usage
-                    }
-                })
+                await group_chat_shared.stream_llm_to_queue(
+                    agent=agent,
+                    agent_messages=agent_messages,
+                    queue=queue,
+                    enable_thinking=enable_thinking,
+                    sender_id=friend_id,
+                    message_id=ai_msg_id,
+                    session_id=session_id,
+                    db=db,
+                )
 
 
 
