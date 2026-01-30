@@ -133,11 +133,16 @@
 ## 6. Prompt 设计与加载
 
 目录建议：
-- `server/app/prompt/auto_drive/brainstorm_system.txt`
-- `server/app/prompt/auto_drive/decision_system.txt`
-- `server/app/prompt/auto_drive/debate_system.txt`
 - `server/app/prompt/auto_drive/debate_judge.txt`
 - `server/app/prompt/auto_drive/summary.txt`
+- `server/app/prompt/auto_drive/auto_drive_rule.txt`（自驱通用规则 + 模式差异）
+- `server/app/prompt/auto_drive/group_auto_drive_message_segment_normal.txt`（单气泡、非剧场式）
+- `server/app/prompt/auto_drive/host_script_brainstorm.txt`（主持人固定话术）
+- `server/app/prompt/auto_drive/host_script_decision.txt`（主持人固定话术）
+- `server/app/prompt/auto_drive/host_script_debate.txt`（主持人固定话术）
+- `server/app/prompt/auto_drive/user_best_practice_brainstorm.txt`（头脑风暴经典方法清单）
+- `server/app/prompt/auto_drive/user_best_practice_decision.txt`（决策模式经典方法清单）
+- `server/app/prompt/auto_drive/user_best_practice_debate.txt`（辩论模式经典方法清单）
 
 加载方式：
 - `get_prompt("auto_drive/brainstorm_system.txt")`（`get_prompt` 包装了 `load_prompt`）
@@ -145,6 +150,60 @@
 约束点：
 - 200 字限制为**软限制**（提示词提醒，不硬截断）
 - 辩论阶段性提示（立论 / 自由交锋 / 总结）
+- **自驱模式 system prompt 片段变更**：
+- 仍使用 `chat/root_system_prompt.txt` 作为最外层模板
+- **不使用** `chat/group_chat_rule.txt`，改为注入 `auto_drive/auto_drive_rule.txt`
+- 消息格式使用 `auto_drive/group_auto_drive_message_segment_normal.txt`（单气泡、非剧场式，发言规则已统一放在此文件）
+  - 主持人固定话术从 `auto_drive/host_script_*.txt` 注入（用于让成员理解“主持人话术”与阶段指令）
+
+## 6.1 自驱模式上下文编排（复用普通群聊逻辑）
+
+**原则**：复用“普通群聊的上下文编排逻辑”，但**不复用代码**。保持“Mock Tool Call + 上帝视角”的上下文结构，让自驱成员在同一语义框架中工作。
+
+### 6.1.1 与普通群聊的差异点（必须落地）
+- **不调用 recall**：不执行 `RecallService.perform_recall`，不注入 `recall_memory` 工具与 injected_recall_messages。
+- **system prompt 片段不同**：见第 6 节的文件清单与组装规则。
+- **发言权仍由用户驱动**：只有被 @ 时发言；否则输出 `<CTRL:NO_REPLY>`（与普通群聊一致）。
+- **主持人固定话术**：不同模式/阶段的主持人话术需长期维护，作为 prompt 片段注入（见 `host_script_*.txt`）。
+
+### 6.1.2 上下文构造步骤（与普通群聊一致）
+1. **历史轮次切分**：以“用户消息”为轮次起点，将历史消息拆为多轮：
+   - 每轮包含：`user`、`others`（同轮其他成员发言）、`self`（当前成员发言）
+2. **按轮次拼接 Item**（Agents item 格式）：
+   - `user` 消息（主持人指令）
+   - `function_call`：`get_other_members_messages`
+   - `function_call_output`：输出该轮次**其他成员**发言拼接（`name: content`），无则 `(empty)`
+   - `assistant`：若该轮当前成员有发言则为内容；否则为 `<CTRL:NO_REPLY>`
+3. **当前轮注入**：
+   - 追加当前 `user` 消息（主持人指令）
+   - `get_other_members_messages` 的输出为**当前轮已发生**的其他成员发言（通常为空）
+   - `is_mentioned` 的输出为：`被提及，需要发言` / `未被提及，不要发言`
+     - 判定来源优先使用 `GroupMessage.mentions`（前端 @ 列表）
+     - 若 mentions 为空，可回退用正文内的 `@昵称` 匹配（可选）
+4. **工具集**：只注册 `get_other_members_messages` 与 `is_mentioned`（不含 recall 工具）。
+
+> 关键语义：模型收到 `is_mentioned=未被提及` 时必须输出 `<CTRL:NO_REPLY>`，以保证“只有被 @ 才发言”的规则稳定生效。
+
+### 6.1.3 伪造 Tool Call 示例（与普通群聊对齐）
+```
+system prompt:
+- 人设（root_system_prompt.txt）
+- 单气泡消息格式规范（group_auto_drive_message_segment_normal.txt）
+- 自驱规则（auto_drive_rule.txt）
+- 主持人话术（host_script_*.txt）
+
+--- 第一轮会话 ---
+user: 辩题是… 先由正方 @张三 陈述核心观点
+assistant(李四): (tool_call) get_other_members_messages()
+(tool_result) 张三：我认为工作压力太大就应该辞职。
+assistant(李四): <CTRL:NO_REPLY>
+
+--- 第二轮会话 ---
+user: 反方 @李四 请陈述核心观点
+assistant(李四): (tool_call) is_mentioned()
+(tool_result) 被提及，需要发言
+assistant(李四): 我认为不应该辞职……
+```
 
 ## 7. 与群聊消息体系的连接
 

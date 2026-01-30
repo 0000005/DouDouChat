@@ -112,6 +112,9 @@
 
 > 现有群聊接口位于 `front/src/api/group.ts` 且走 `/api/chat/group/{group_id}/messages`。自驱必须独立走新路由，避免复用 `GroupChatService.send_group_message_stream`。
 
+补充约束：
+- 自驱“插话/主持人发言”接口需携带 `mentions` 列表（@ 成员），供后端 `is_mentioned` 判定使用。
+
 ## 7. SSE 事件接入
 
 **强约束：自驱 SSE 的事件与数据格式必须完全遵循普通群聊 SSE 协议**  
